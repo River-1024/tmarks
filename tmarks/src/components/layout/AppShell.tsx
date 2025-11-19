@@ -9,7 +9,8 @@ import {
   LogOut,
   Layers,
   Shield,
-  Download
+  Download,
+  Settings
 } from 'lucide-react'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -118,6 +119,17 @@ export function AppShell() {
                 {isUserMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg border border-border overflow-hidden z-50"
                        style={{backgroundColor: 'var(--card)'}}>
+                    <button
+                      onClick={() => {
+                        navigate('/settings/general')
+                        setIsUserMenuOpen(false)
+                      }}
+                      className="w-full px-4 py-3 flex items-center gap-2 hover:bg-muted/50 transition-colors duration-200"
+                      style={{color: 'var(--foreground)'}}
+                    >
+                      <Settings className="w-4 h-4" />
+                      <span>通用设置</span>
+                    </button>
                     <button
                       onClick={() => {
                         navigate('/extension')

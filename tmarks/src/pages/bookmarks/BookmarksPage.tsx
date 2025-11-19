@@ -293,7 +293,7 @@ export function BookmarksPage() {
     }
   }, [filteredBookmarks.length])
 
-  // 标签自动清空逻辑 - 30秒后自动清除选中状态
+  // 标签自动清空逻辑 - 根据用户设置自动清除选中状态
   useEffect(() => {
     // 清除之前的定时器
     if (autoCleanupTimerRef.current) {
@@ -301,12 +301,16 @@ export function BookmarksPage() {
       autoCleanupTimerRef.current = null
     }
 
-    // 如果有选中的标签，设置30秒后自动清空
-    if (selectedTags.length > 0) {
+    // 检查是否启用标签选中自动清空
+    const enableAutoClear = preferences?.enable_tag_selection_auto_clear ?? false
+    const clearSeconds = preferences?.tag_selection_auto_clear_seconds ?? 30
+
+    // 如果启用了自动清空且有选中的标签，设置定时器
+    if (enableAutoClear && selectedTags.length > 0) {
       autoCleanupTimerRef.current = setTimeout(() => {
         setSelectedTags([])
         setDebouncedSelectedTags([])
-      }, 30000) // 30秒
+      }, clearSeconds * 1000)
     }
 
     // 清理函数
@@ -316,9 +320,9 @@ export function BookmarksPage() {
         autoCleanupTimerRef.current = null
       }
     }
-  }, [selectedTags])
+  }, [selectedTags, preferences?.enable_tag_selection_auto_clear, preferences?.tag_selection_auto_clear_seconds])
 
-  // 搜索关键词自动清空逻辑 - 20秒后自动清除搜索内容
+  // 搜索关键词自动清空逻辑 - 根据用户设置自动清除搜索内容
   useEffect(() => {
     // 清除之前的定时器
     if (searchCleanupTimerRef.current) {
@@ -326,12 +330,16 @@ export function BookmarksPage() {
       searchCleanupTimerRef.current = null
     }
 
-    // 如果有搜索关键词，设置15秒后自动清空
-    if (searchKeyword.trim()) {
+    // 检查是否启用搜索自动清空
+    const enableAutoClear = preferences?.enable_search_auto_clear ?? true
+    const clearSeconds = preferences?.search_auto_clear_seconds ?? 15
+
+    // 如果启用了自动清空且有搜索关键词，设置定时器
+    if (enableAutoClear && searchKeyword.trim()) {
       searchCleanupTimerRef.current = setTimeout(() => {
         setSearchKeyword('')
         setDebouncedSearchKeyword('')
-      }, 15000) // 15秒
+      }, clearSeconds * 1000)
     }
 
     // 清理函数
@@ -341,7 +349,7 @@ export function BookmarksPage() {
         searchCleanupTimerRef.current = null
       }
     }
-  }, [searchKeyword])
+  }, [searchKeyword, preferences?.enable_search_auto_clear, preferences?.search_auto_clear_seconds])
 
   const hasMore = Boolean(bookmarksQuery.hasNextPage)
   const handleOpenForm = (bookmark?: Bookmark) => {

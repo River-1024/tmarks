@@ -13,7 +13,7 @@ interface TabItemProps {
   batchMode: boolean
   editingItemId: string | null
   editingTitle: string
-  onItemClick: (item: TabGroupItem, e: React.MouseEvent) => void
+  onItemClick: (item: TabGroupItem, e: React.MouseEvent | React.ChangeEvent<HTMLInputElement>) => void
   onEditItem: (item: TabGroupItem) => void
   onSaveEdit: (groupId: string, itemId: string) => void
   onTogglePin: (groupId: string, itemId: string, currentPinned: number) => void
@@ -95,7 +95,7 @@ export function TabItem({
           checked={isSelected}
           onChange={(e) => {
             e.stopPropagation()
-            onItemClick(item, e as any)
+            onItemClick(item, e)
           }}
           className="checkbox"
         />

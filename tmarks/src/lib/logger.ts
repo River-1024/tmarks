@@ -5,11 +5,13 @@
 
 const isDev = import.meta.env.DEV
 
+type LogValue = string | number | boolean | null | undefined | Error | Record<string, unknown> | unknown[] | unknown
+
 export const logger = {
   /**
    * 普通日志
    */
-  log: (...args: any[]) => {
+  log: (...args: LogValue[]) => {
     if (isDev) {
       console.log(...args)
     }
@@ -18,7 +20,7 @@ export const logger = {
   /**
    * 错误日志
    */
-  error: (...args: any[]) => {
+  error: (...args: LogValue[]) => {
     if (isDev) {
       console.error(...args)
     }
@@ -27,7 +29,7 @@ export const logger = {
   /**
    * 警告日志
    */
-  warn: (...args: any[]) => {
+  warn: (...args: LogValue[]) => {
     if (isDev) {
       console.warn(...args)
     }
@@ -36,7 +38,7 @@ export const logger = {
   /**
    * 调试日志
    */
-  debug: (...args: any[]) => {
+  debug: (...args: LogValue[]) => {
     if (isDev) {
       console.debug(...args)
     }
@@ -45,7 +47,7 @@ export const logger = {
   /**
    * 信息日志
    */
-  info: (...args: any[]) => {
+  info: (...args: LogValue[]) => {
     if (isDev) {
       console.info(...args)
     }
@@ -72,7 +74,7 @@ export const logger = {
   /**
    * 表格日志
    */
-  table: (data: any) => {
+  table: (data: Record<string, unknown>[] | Record<string, unknown>) => {
     if (isDev) {
       console.table(data)
     }
@@ -156,7 +158,7 @@ export const errorTracker = {
   /**
    * 捕获错误
    */
-  capture: (error: Error, context?: Record<string, any>) => {
+  capture: (error: Error, context?: Record<string, unknown>) => {
     if (isDev) {
       logger.error('Error captured:', error, context)
     } else {
@@ -168,7 +170,7 @@ export const errorTracker = {
   /**
    * 捕获异常
    */
-  captureException: (exception: any, context?: Record<string, any>) => {
+  captureException: (exception: unknown, context?: Record<string, unknown>) => {
     if (isDev) {
       logger.error('Exception captured:', exception, context)
     } else {

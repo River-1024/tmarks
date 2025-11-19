@@ -1,0 +1,195 @@
+name: Deploy and Migrate Database
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'tmarks/**'
+
+jobs:
+  check-migrations:
+    runs-on: ubuntu-latest
+    name: Check for new migrations
+    outputs:
+      has_migrations: ${{ steps.check.outputs.has_migrations }}
+      migration_files: ${{ steps.check.outputs.migration_files }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      - name: Check for new migration files
+        id: check
+        run: |
+          echo "Checking for new migrations..."
+          NEW_MIGRATIONS=$(git diff --name-only HEAD~1 HEAD | grep "^tmarks/migrations/[0-9].*\.sql$" || echo "")
+          
+          if [ -n "$NEW_MIGRATIONS" ]; then
+            echo "has_migrations=true" >> $GITHUB_OUTPUT
+            echo "migration_files<<EOF" >> $GITHUB_OUTPUT
+            echo "$NEW_MIGRATIONS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "✅ Found new migrations:"
+            echo "$NEW_MIGRATIONS"
+          else
+            echo "has_migrations=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No new migrations found"
+          fi
+
+  migrate:
+    runs-on: ubuntu-latest
+    name: Run Database Migrations
+    needs: check-migrations
+    if: needs.check-migrations.outputs.has_migrations == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      
+      - name: Install wrangler
+        run: npm install -g wrangler
+      
+      - name: Get migration files
+        id: migrations
+        run: |
+          cd tmarks/migrations
+          # 获取所有编号开头的迁移文件并排序
+          MIGRATIONS=$(ls [0-9][0-9][0-9][0-9]_*.sql 2>/dev/null | sort || echo "")
+          echo "Found migrations:"
+          echo "$MIGRATIONS"
+          echo "migrations<<EOF" >> $GITHUB_OUTPUT
+          echo "$MIGRATIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Execute migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+        run: |
+          cd tmarks
+          
+          echo "🚀 Starting database migrations..."
+          echo ""
+          
+          # 读取迁移历史
+          if [ -f .migration-history-prod.json ]; then
+            echo "📖 Reading migration history..."
+            cat .migration-history-prod.json
+          else
+            echo "📝 Creating new migration history..."
+            echo '{"migrations":[]}' > .migration-history-prod.json
+          fi
+          
+          echo ""
+          echo "🔍 Processing migrations..."
+          echo ""
+          
+          # 遍历所有迁移文件
+          for migration in $(ls migrations/[0-9][0-9][0-9][0-9]_*.sql 2>/dev/null | sort); do
+            filename=$(basename "$migration")
+            
+            # 检查是否已执行
+            if grep -q "\"$filename\"" .migration-history-prod.json 2>/dev/null; then
+              echo "⏭️  Skipped (already applied): $filename"
+              continue
+            fi
+            
+            echo "📝 Executing: $filename"
+            
+            # 读取 SQL 内容
+            SQL_CONTENT=$(cat "$migration")
+            
+            # 使用 Cloudflare API 执行 SQL
+            RESPONSE=$(curl -s -X POST \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database/${DATABASE_ID}/query" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "{\"sql\":$(echo "$SQL_CONTENT" | jq -Rs .)}")
+            
+            # 检查响应
+            SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+            
+            if [ "$SUCCESS" = "true" ]; then
+              echo "✅ Success: $filename"
+              
+              # 更新迁移历史
+              jq --arg migration "$filename" '.migrations += [$migration] | .migrations |= sort | .lastUpdated = now | .lastUpdated |= todate' \
+                .migration-history-prod.json > .migration-history-prod.json.tmp
+              mv .migration-history-prod.json.tmp .migration-history-prod.json
+            else
+              echo "❌ Failed: $filename"
+              echo "Response: $RESPONSE"
+              exit 1
+            fi
+            
+            echo ""
+          done
+          
+          echo "✅ All migrations completed successfully!"
+          echo ""
+          echo "📊 Migration history:"
+          cat .migration-history-prod.json | jq .
+      
+      - name: Upload migration history
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-history
+          path: tmarks/.migration-history-prod.json
+          retention-days: 90
+      
+      - name: Comment on commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const migrations = `${{ needs.check-migrations.outputs.migration_files }}`.split('\n').filter(Boolean);
+            const body = `## ✅ Database Migrations Completed
+            
+            The following migrations were successfully applied to the production database:
+            
+            ${migrations.map(m => `- \`${m}\``).join('\n')}
+            
+            🔗 [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: body
+            });
+
+  notify:
+    runs-on: ubuntu-latest
+    name: Notify completion
+    needs: [check-migrations, migrate]
+    if: always()
+    
+    steps:
+      - name: Notify success
+        if: needs.migrate.result == 'success'
+        run: |
+          echo "✅ Deployment and migration completed successfully!"
+      
+      - name: Notify skipped
+        if: needs.check-migrations.outputs.has_migrations == 'false'
+        run: |
+          echo "ℹ️ No migrations needed, deployment completed."
+      
+      - name: Notify failure
+        if: needs.migrate.result == 'failure'
+        run: |
+          echo "❌ Migration failed! Please check the logs."
+          exit 1

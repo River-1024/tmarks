@@ -144,22 +144,60 @@ export type TagLayoutPreference = 'grid' | 'masonry'
 export type SortByPreference = 'created' | 'updated' | 'pinned' | 'popular'
 
 export interface UserPreferences {
-  theme: 'light' | 'dark'
+  user_id?: string
+  theme: 'light' | 'dark' | 'system'
   page_size: number
   view_mode: 'list' | 'card' | 'minimal' | 'title'
   density: 'compact' | 'normal' | 'comfortable'
   tag_layout: TagLayoutPreference
   sort_by: SortByPreference
+  // 通用设置
+  search_auto_clear_seconds: number
+  tag_selection_auto_clear_seconds: number
+  enable_search_auto_clear: boolean
+  enable_tag_selection_auto_clear: boolean
   updated_at: string
 }
 
 export interface UpdatePreferencesRequest {
-  theme?: 'light' | 'dark'
+  theme?: 'light' | 'dark' | 'system'
   page_size?: number
   view_mode?: 'list' | 'card' | 'minimal' | 'title'
   density?: 'compact' | 'normal' | 'comfortable'
   tag_layout?: TagLayoutPreference
   sort_by?: SortByPreference
+  
+  // 1. 搜索和筛选相关
+  search_auto_clear_seconds?: number
+  tag_selection_auto_clear_seconds?: number
+  enable_search_auto_clear?: boolean
+  enable_tag_selection_auto_clear?: boolean
+  search_debounce_ms?: number
+  
+  // 2. 编辑和交互相关
+  mobile_edit_auto_cancel_seconds?: number
+  double_click_delay_ms?: number
+  enable_edit_confirmation?: boolean
+  
+  // 3. 动画和性能相关
+  enable_animations?: boolean
+  animation_speed?: 'fast' | 'normal' | 'slow'
+  enable_virtual_scroll?: boolean
+  
+  // 4. 通知和提示相关
+  toast_duration_seconds?: number
+  enable_success_sound?: boolean
+  auto_copy_share_link?: boolean
+  
+  // 5. 自动保存和同步相关
+  auto_save_delay_seconds?: number
+  warn_unsaved_changes?: boolean
+  
+  // 6. 显示和布局相关
+  show_bookmark_thumbnails?: boolean
+  show_bookmark_descriptions?: boolean
+  show_tag_colors?: boolean
+  sidebar_default_expanded?: boolean
 }
 
 export interface PreferencesResponse {
@@ -359,3 +397,4 @@ export interface StatisticsResponse {
   top_domains: DomainCount[]
   group_size_distribution: GroupSizeDistribution[]
 }
+

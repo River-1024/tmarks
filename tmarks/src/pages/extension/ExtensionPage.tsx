@@ -1,17 +1,17 @@
 import { Download, Chrome, CheckCircle, AlertCircle } from 'lucide-react'
 
 export function ExtensionPage() {
-  const handleDownload = () => {
+  const handleDownload = (browser: 'chrome' | 'firefox' | 'edge' | 'opera' | 'brave' | '360' | 'qq' | 'sogou') => {
     const link = document.createElement('a')
-    link.href = '/tmarks-extension.zip'
-    link.download = 'tmarks-extension.zip'
+    link.href = `/extensions/tmarks-extension-${browser}.zip`
+    link.download = `tmarks-extension-${browser}.zip`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-4xl">
+    <div className="container mx-auto px-4 py-6 max-w-7xl">
       {/* 标题区域 */}
       <div className="text-center mb-8">
         <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-float">
@@ -26,21 +26,162 @@ export function ExtensionPage() {
       </div>
 
       {/* 下载按钮 */}
-      <div className="card shadow-float mb-8 text-center bg-gradient-to-br from-primary/5 to-secondary/5">
-        <button
-          onClick={handleDownload}
-          className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-br from-primary to-secondary text-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95"
-          style={{ color: 'var(--primary-content)' }}
-        >
-          <Download className="w-6 h-6" />
-          下载插件 (Chrome/Edge)
-        </button>
-        <p className="text-sm mt-4" style={{ color: 'var(--muted-foreground)' }}>
-          支持 Chrome、Edge 及其他 Chromium 内核浏览器
-        </p>
-        <div className="mt-4 pt-4 border-t border-border">
+      <div className="card shadow-float mb-8 bg-gradient-to-br from-primary/5 to-secondary/5">
+        <h2 className="text-xl font-bold mb-4 text-center" style={{ color: 'var(--foreground)' }}>
+          选择你的浏览器下载
+        </h2>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          {/* Chrome */}
+          <div className="text-center p-3 rounded-xl border-2 transition-all" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+              <Chrome className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--foreground)' }}>Chrome</h3>
+            <button onClick={() => handleDownload('chrome')} className="w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95">
+              <Download className="w-3 h-3" />下载
+            </button>
+          </div>
+
+          {/* Firefox */}
+          <div className="text-center p-3 rounded-xl border-2 transition-all" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm6.337 18.337c-3.515 3.515-9.213 3.515-12.728 0-3.515-3.515-3.515-9.213 0-12.728 3.515-3.515 9.213-3.515 12.728 0 3.515 3.515 3.515 9.213 0 12.728z"/>
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--foreground)' }}>Firefox</h3>
+            <button onClick={() => handleDownload('firefox')} className="w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 text-white text-xs font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95">
+              <Download className="w-3 h-3" />下载
+            </button>
+          </div>
+
+          {/* Edge */}
+          <div className="text-center p-3 rounded-xl border-2 transition-all" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--foreground)' }}>Edge</h3>
+            <button onClick={() => handleDownload('edge')} className="w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 text-white text-xs font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95">
+              <Download className="w-3 h-3" />下载
+            </button>
+          </div>
+
+          {/* Opera */}
+          <div className="text-center p-3 rounded-xl border-2 transition-all" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--foreground)' }}>Opera</h3>
+            <button onClick={() => handleDownload('opera')} className="w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-red-500 to-red-600 text-white text-xs font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95">
+              <Download className="w-3 h-3" />下载
+            </button>
+          </div>
+
+          {/* Brave */}
+          <div className="text-center p-3 rounded-xl border-2 transition-all" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gradient-to-br from-orange-600 to-orange-700 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/>
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--foreground)' }}>Brave</h3>
+            <button onClick={() => handleDownload('brave')} className="w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-orange-600 to-orange-700 text-white text-xs font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95">
+              <Download className="w-3 h-3" />下载
+            </button>
+          </div>
+
+          {/* 360浏览器 */}
+          <div className="text-center p-3 rounded-xl border-2 transition-all" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--foreground)' }}>360</h3>
+            <button onClick={() => handleDownload('360')} className="w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-green-500 to-green-600 text-white text-xs font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95">
+              <Download className="w-3 h-3" />下载
+            </button>
+          </div>
+
+          {/* QQ浏览器 */}
+          <div className="text-center p-3 rounded-xl border-2 transition-all" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gradient-to-br from-blue-400 to-blue-500 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--foreground)' }}>QQ</h3>
+            <button onClick={() => handleDownload('qq')} className="w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-blue-400 to-blue-500 text-white text-xs font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95">
+              <Download className="w-3 h-3" />下载
+            </button>
+          </div>
+
+          {/* 搜狗浏览器 */}
+          <div className="text-center p-3 rounded-xl border-2 transition-all" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--foreground)' }}>搜狗</h3>
+            <button onClick={() => handleDownload('sogou')} className="w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-br from-orange-400 to-orange-500 text-white text-xs font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95">
+              <Download className="w-3 h-3" />下载
+            </button>
+          </div>
+        </div>
+
+        {/* 支持的浏览器列表 */}
+        <div className="mt-6 pt-6 border-t border-border">
+          <h3 className="text-sm font-semibold mb-3 text-center" style={{ color: 'var(--foreground)' }}>
+            支持的浏览器
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>
+            <div className="text-center p-2 rounded bg-muted/30">
+              <div className="font-medium">Chrome</div>
+              <div className="text-xs opacity-75">88+</div>
+            </div>
+            <div className="text-center p-2 rounded bg-muted/30">
+              <div className="font-medium">Edge</div>
+              <div className="text-xs opacity-75">88+</div>
+            </div>
+            <div className="text-center p-2 rounded bg-muted/30">
+              <div className="font-medium">Firefox</div>
+              <div className="text-xs opacity-75">109+</div>
+            </div>
+            <div className="text-center p-2 rounded bg-muted/30">
+              <div className="font-medium">Brave</div>
+              <div className="text-xs opacity-75">88+</div>
+            </div>
+            <div className="text-center p-2 rounded bg-muted/30">
+              <div className="font-medium">Opera</div>
+              <div className="text-xs opacity-75">74+</div>
+            </div>
+            <div className="text-center p-2 rounded bg-muted/30">
+              <div className="font-medium">360浏览器</div>
+              <div className="text-xs opacity-75">极速模式</div>
+            </div>
+            <div className="text-center p-2 rounded bg-muted/30">
+              <div className="font-medium">QQ浏览器</div>
+              <div className="text-xs opacity-75">极速模式</div>
+            </div>
+            <div className="text-center p-2 rounded bg-muted/30">
+              <div className="font-medium">搜狗浏览器</div>
+              <div className="text-xs opacity-75">极速模式</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 pt-6 border-t border-border text-center">
           <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-            版本：1.0.0 | 大小：约 270 KB | 更新时间：2024-10-26
+            版本：1.0.0 | 大小：约 258 KB | 更新时间：2024-11-19
+          </p>
+          <p className="text-xs mt-2" style={{ color: 'var(--muted-foreground)' }}>
+            💡 提供 8 个浏览器专用版本，也可以使用 Chrome 通用版（支持所有 Chromium 内核浏览器）
           </p>
         </div>
       </div>
@@ -134,7 +275,8 @@ export function ExtensionPage() {
               </p>
               <div className="bg-muted/30 rounded-lg p-3 font-mono text-sm">
                 <p className="mb-1">Chrome: chrome://extensions/</p>
-                <p>Edge: edge://extensions/</p>
+                <p className="mb-1">Edge: edge://extensions/</p>
+                <p>Firefox: about:debugging#/runtime/this-firefox</p>
               </div>
             </div>
           </div>
@@ -228,7 +370,15 @@ export function ExtensionPage() {
               Q: 插件支持哪些浏览器？
             </h3>
             <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-              A: 支持所有基于 Chromium 内核的浏览器，包括 Chrome、Edge、Brave、Opera 等。
+              A: 支持 Chrome、Edge、Firefox、Brave、Opera 等主流浏览器。Chrome 和 Edge 使用同一个版本（Chromium 内核），Firefox 使用专用版本。
+            </p>
+          </div>
+          <div>
+            <h3 className="font-medium mb-1" style={{ color: 'var(--foreground)' }}>
+              Q: Chrome 和 Edge 可以用同一个版本吗？
+            </h3>
+            <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
+              A: 是的！Chrome、Edge、Brave、Opera 等基于 Chromium 内核的浏览器都使用 Chrome 版本。只有 Firefox 需要下载专用版本。
             </p>
           </div>
           <div>

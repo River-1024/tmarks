@@ -14,6 +14,7 @@ import { ApiKeysPage } from '@/pages/settings/ApiKeysPage'
 import { ShareSettingsPage } from '@/pages/settings/ShareSettingsPage'
 import { ImportExportPage } from '@/pages/settings/ImportExportPage'
 import { PermissionsPage } from '@/pages/settings/PermissionsPage'
+import { GeneralSettingsPage } from '@/pages/settings/GeneralSettingsPage'
 import { PublicSharePage } from '@/pages/share/PublicSharePage'
 import { ExtensionPage } from '@/pages/extension/ExtensionPage'
 
@@ -37,6 +38,7 @@ export function AppRouter() {
           <Route path="/tab/trash" element={<TrashPage />} />
           <Route path="/tab/statistics" element={<StatisticsPage />} />
           <Route path="/tab/:id" element={<TabGroupDetailPage />} />
+          <Route path="/settings/general" element={<GeneralSettingsPage />} />
           <Route path="/api-keys" element={<ApiKeysPage />} />
           <Route path="/share-settings" element={<ShareSettingsPage />} />
           <Route path="/import-export" element={<ImportExportPage />} />

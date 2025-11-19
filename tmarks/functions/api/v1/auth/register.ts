@@ -95,16 +95,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     } catch (error) {
       if (error instanceof Error && (/no such column: tag_layout/i.test(error.message) || /no such column: sort_by/i.test(error.message))) {
         // 尝试不包含 tag_layout 和 sort_by
-        try {
-          await db.prepare(
-            `INSERT INTO user_preferences (user_id, theme, page_size, view_mode, density, updated_at)
-             VALUES (?, 'light', 30, 'list', 'normal', ?)`
-          )
-            .bind(userId, nowISO)
-            .run()
-        } catch (fallbackError) {
-          throw fallbackError
-        }
+        await db.prepare(
+          `INSERT INTO user_preferences (user_id, theme, page_size, view_mode, density, updated_at)
+           VALUES (?, 'light', 30, 'list', 'normal', ?)`
+        )
+          .bind(userId, nowISO)
+          .run()
       } else {
         throw error
       }

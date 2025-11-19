@@ -39,3 +39,7 @@ coverage
 # Build
 build
 .deploy
+
+# Database migration history (local only)
+.migration-history.json
+.migration-history-prod.json

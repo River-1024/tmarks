@@ -2,13 +2,20 @@ import { Calendar, Layers, Trash2, Edit2, FolderOpen, Download, Palette, Tag, Sh
 import type { TabGroup } from '@/lib/types'
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { getColorClasses } from './ColorPicker'
+import { getColorClasses } from './colorUtils'
 import { TagsList } from './TagsInput'
+
+interface TabItem {
+  id: string
+  url: string
+  title: string
+  favicon?: string | null
+}
 
 interface TabGroupCardProps {
   group: TabGroup
   onDelete: (id: string, title: string) => void
-  onOpenAll: (items: any[]) => void
+  onOpenAll: (items: TabItem[]) => void
   onExport: (group: TabGroup) => void
   onColorClick: (groupId: string) => void
   onTagsClick: (groupId: string) => void

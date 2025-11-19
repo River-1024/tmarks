@@ -325,8 +325,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       return;
     }
 
+    // AI 书签助手的核心功能是标签推荐，必须至少有一个标签
     if (selectedTags.length === 0) {
-      set({ error: 'Please select at least one tag' });
+      set({ error: '请至少选择一个标签' });
       return;
     }
 

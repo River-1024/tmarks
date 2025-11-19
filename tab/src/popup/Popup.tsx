@@ -90,11 +90,11 @@ export function Popup() {
   }, [config, viewMode]);
 
   const handleSave = async () => {
-    // 移除强制标签验证 - 允许保存无标签书签
-    // if (selectedTags.length === 0) {
-    //   setError('请至少选择一个标签');
-    //   return;
-    // }
+    // AI 书签助手需要标签来组织和分类书签
+    if (selectedTags.length === 0) {
+      setError('请至少选择一个标签');
+      return;
+    }
 
     await saveBookmark();
   };

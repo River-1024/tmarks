@@ -9,8 +9,8 @@ export const PREFERENCES_QUERY_KEY = 'preferences'
 function getStoredViewMode(): 'list' | 'card' | 'minimal' | 'title' | null {
   if (typeof window === 'undefined') return null
   const stored = window.localStorage.getItem('tmarks:view_mode')
-  const validModes = ['list', 'card', 'minimal', 'title']
-  return stored && validModes.includes(stored) ? (stored as any) : null
+  const validModes: string[] = ['list', 'card', 'minimal', 'title']
+  return stored && validModes.includes(stored) ? (stored as 'list' | 'card' | 'minimal' | 'title') : null
 }
 
 // 默认偏好设置
@@ -19,12 +19,17 @@ function getDefaultPreferences(): UserPreferences {
   const storedViewMode = getStoredViewMode()
 
   return {
+    user_id: '',
     theme: 'light',
     page_size: 30,
     view_mode: storedViewMode || 'list',  // 使用 localStorage 中的值
     density: 'normal',
     tag_layout: 'grid',
     sort_by: 'popular',
+    search_auto_clear_seconds: 15,
+    tag_selection_auto_clear_seconds: 30,
+    enable_search_auto_clear: true,
+    enable_tag_selection_auto_clear: false,
     updated_at: new Date().toISOString(),
   }
 }

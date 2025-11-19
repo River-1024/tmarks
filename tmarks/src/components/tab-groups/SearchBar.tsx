@@ -1,6 +1,6 @@
 import { Search, CheckCircle, BarChart3, Archive, ArrowUpDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { type SortOption } from './SortSelector'
+import type { SortOption } from './sortUtils'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 
 interface SearchBarProps {

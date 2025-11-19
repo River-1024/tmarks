@@ -80,66 +80,35 @@ export function BookmarkCardView({
     }
   }, [])
 
-  // 按置顶状态分组书签
-  const pinnedBookmarks = bookmarks.filter(b => b.is_pinned)
-  const unpinnedBookmarks = bookmarks.filter(b => !b.is_pinned)
-
-  // 动态分列：将书签分配到各列
-  const columnedBookmarks = (() => {
-    // 创建 N 个空列数组
-    const cols: Bookmark[][] = Array.from({ length: columns }, () => [])
-    
-    // 1. 先将置顶书签按行分散到各列顶部
-    for (let i = 0; i < pinnedBookmarks.length; i++) {
-      const colIndex = i % columns
-      const col = cols[colIndex]
-      const bookmark = pinnedBookmarks[i]
-      if (col && bookmark) {
-        col.push(bookmark)
-      }
-    }
-    
-    // 2. 再将未置顶书签按列顺序分配
-    for (let i = 0; i < unpinnedBookmarks.length; i++) {
-      const colIndex = i % columns
-      const col = cols[colIndex]
-      const bookmark = unpinnedBookmarks[i]
-      if (col && bookmark) {
-        col.push(bookmark)
-      }
-    }
-    
-    return cols
-  })()
-
+  // 按置顶状态分组书签，置顶的在前面
+  const sortedBookmarks = [
+    ...bookmarks.filter(b => b.is_pinned),
+    ...bookmarks.filter(b => !b.is_pinned)
+  ]
 
   return (
     <div ref={containerRef} className="w-full">
-      {/* CSS Grid 布局 - 并排显示各列 */}
-      {columnedBookmarks.length > 0 && (
+      {/* CSS Grid 自动填充布局 - 让浏览器自动按行填充 */}
+      {sortedBookmarks.length > 0 && (
         <div
           className="w-full"
           style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${columns}, 1fr)`,
+            gridTemplateColumns: `repeat(auto-fill, minmax(280px, 1fr))`,
             gap: '1rem'
           } as React.CSSProperties}
         >
-          {columnedBookmarks.map((col, colIndex) => (
-            <div key={`col-${colIndex}`}>
-              {col.map((bookmark) => (
-                <div key={bookmark.id} className="mb-3 sm:mb-4">
-                  <BookmarkCard
-                    bookmark={bookmark}
-                    onEdit={onEdit ? () => onEdit(bookmark) : undefined}
-                    readOnly={readOnly}
-                    batchMode={batchMode}
-                    isSelected={selectedIds.includes(bookmark.id)}
-                    onToggleSelect={onToggleSelect}
-                    showEditHint={showEditHint}
-                  />
-                </div>
-              ))}
+          {sortedBookmarks.map((bookmark) => (
+            <div key={bookmark.id}>
+              <BookmarkCard
+                bookmark={bookmark}
+                onEdit={onEdit ? () => onEdit(bookmark) : undefined}
+                readOnly={readOnly}
+                batchMode={batchMode}
+                isSelected={selectedIds.includes(bookmark.id)}
+                onToggleSelect={onToggleSelect}
+                showEditHint={showEditHint}
+              />
             </div>
           ))}
         </div>

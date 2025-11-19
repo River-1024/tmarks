@@ -26,8 +26,8 @@ interface UseImportExportReturn {
   importError: string | null
   
   // 预览相关
-  getExportPreview: () => Promise<any>
-  getImportPreview: (format: ImportFormat) => Promise<any>
+  getExportPreview: () => Promise<unknown>
+  getImportPreview: (format: ImportFormat) => Promise<unknown>
   
   // 状态重置
   clearErrors: () => void

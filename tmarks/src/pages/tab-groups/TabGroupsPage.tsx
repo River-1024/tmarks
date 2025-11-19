@@ -3,7 +3,8 @@ import { tabGroupsService } from '@/services/tab-groups'
 import { logger } from '@/lib/logger'
 import type { TabGroup, TabGroupItem } from '@/lib/types'
 import { ShareDialog } from '@/components/tab-groups/ShareDialog'
-import { sortTabGroups, type SortOption } from '@/components/tab-groups/SortSelector'
+import type { SortOption } from '@/components/tab-groups/sortUtils'
+import { sortTabGroups } from '@/components/tab-groups/sortUtils'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { SearchBar } from '@/components/tab-groups/SearchBar'
 import { BatchActionBar } from '@/components/tab-groups/BatchActionBar'
@@ -27,6 +28,7 @@ import { useTabGroupActions } from '@/hooks/useTabGroupActions'
 import { useBatchActions } from '@/hooks/useBatchActions'
 import { searchInFields } from '@/lib/search-utils'
 import { MoveItemDialog } from '@/components/tab-groups/MoveItemDialog'
+import { usePreferences } from '@/hooks/usePreferences'
 import { useIsMobile, useIsDesktop } from '@/hooks/useMediaQuery'
 import { Drawer } from '@/components/common/Drawer'
 import { BottomNav } from '@/components/common/BottomNav'
@@ -141,7 +143,10 @@ export function TabGroupsPage() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  // 搜索自动清空
+  // 获取用户偏好设置
+  const { data: preferences } = usePreferences()
+
+  // 搜索自动清空 - 根据用户设置
   useEffect(() => {
     // 清除之前的定时器
     if (searchCleanupTimerRef.current) {
@@ -149,12 +154,16 @@ export function TabGroupsPage() {
       searchCleanupTimerRef.current = null
     }
 
-    // 如果有搜索关键词，设置15秒后自动清空
-    if (searchQuery.trim()) {
+    // 检查是否启用搜索自动清空
+    const enableAutoClear = preferences?.enable_search_auto_clear ?? true
+    const clearSeconds = preferences?.search_auto_clear_seconds ?? 15
+
+    // 如果启用了自动清空且有搜索关键词，设置定时器
+    if (enableAutoClear && searchQuery.trim()) {
       searchCleanupTimerRef.current = setTimeout(() => {
         setSearchQuery('')
         setDebouncedSearchQuery('')
-      }, 15000) // 15秒
+      }, clearSeconds * 1000)
     }
 
     // 清理函数
@@ -164,7 +173,7 @@ export function TabGroupsPage() {
         searchCleanupTimerRef.current = null
       }
     }
-  }, [searchQuery])
+  }, [searchQuery, preferences?.enable_search_auto_clear, preferences?.search_auto_clear_seconds])
 
   const loadTabGroups = async () => {
     try {
@@ -280,7 +289,7 @@ export function TabGroupsPage() {
     }
   }
 
-  const handleItemClick = (item: TabGroupItem, e: React.MouseEvent) => {
+  const handleItemClick = (item: TabGroupItem, e: React.MouseEvent | React.ChangeEvent<HTMLInputElement>) => {
     if (batchMode) {
       e.preventDefault()
       const newSelected = new Set(selectedItems)

@@ -2,11 +2,12 @@
 
 /**
  * 构建并打包浏览器扩展
+ * 生成 Chrome 和 Firefox 两个版本
  * 将打包后的 zip 文件复制到 tmarks/public 目录供下载
  */
 
 import { execSync } from 'child_process';
-import { createWriteStream, createReadStream, existsSync, mkdirSync } from 'fs';
+import { createWriteStream, existsSync, mkdirSync, copyFileSync } from 'fs';
 import { readdir, stat, rm } from 'fs/promises';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -19,7 +20,15 @@ const __dirname = dirname(__filename);
 const TAB_ROOT = resolve(__dirname, '..');
 const DIST_DIR = join(TAB_ROOT, 'dist');
 const TMARKS_PUBLIC_DIR = resolve(TAB_ROOT, '..', 'tmarks', 'public');
-const OUTPUT_ZIP = join(TMARKS_PUBLIC_DIR, 'tmarks-extension.zip');
+const TMARKS_EXTENSIONS_DIR = join(TMARKS_PUBLIC_DIR, 'extensions');
+
+// 输出文件
+const OUTPUT_CHROME_ZIP = join(TMARKS_EXTENSIONS_DIR, 'tmarks-extension-chrome.zip');
+const OUTPUT_FIREFOX_ZIP = join(TMARKS_EXTENSIONS_DIR, 'tmarks-extension-firefox.zip');
+
+// Manifest 文件
+const MANIFEST_CHROME = join(TAB_ROOT, 'manifest.json');
+const MANIFEST_FIREFOX = join(TAB_ROOT, 'manifest.firefox.json');
 
 // 颜色输出
 const colors = {
@@ -112,7 +121,7 @@ function formatSize(bytes) {
 /**
  * 创建 ZIP 压缩包
  */
-async function createZip(sourceDir, outputPath) {
+async function createZip(sourceDir, outputPath, manifestPath) {
   return new Promise((resolve, reject) => {
     const output = createWriteStream(outputPath);
     const archive = archiver('zip', {
@@ -132,6 +141,11 @@ async function createZip(sourceDir, outputPath) {
     // 添加整个 dist 目录的内容（不包含 dist 目录本身）
     archive.directory(sourceDir, false);
     
+    // 如果提供了自定义 manifest，替换默认的
+    if (manifestPath && existsSync(manifestPath)) {
+      archive.file(manifestPath, { name: 'manifest.json' });
+    }
+    
     archive.finalize();
   });
 }
@@ -146,7 +160,7 @@ async function main() {
 
   try {
     // 步骤 1: 检查环境
-    logStep('1/5', '检查环境');
+    logStep('1/6', '检查环境');
     if (!checkDirectory(TAB_ROOT, 'Tab 项目根目录')) {
       process.exit(1);
     }
@@ -155,9 +169,24 @@ async function main() {
       mkdirSync(TMARKS_PUBLIC_DIR, { recursive: true });
       logSuccess('已创建 TMarks public 目录');
     }
+    
+    // 创建 extensions 子目录
+    if (!existsSync(TMARKS_EXTENSIONS_DIR)) {
+      mkdirSync(TMARKS_EXTENSIONS_DIR, { recursive: true });
+      logSuccess('已创建 extensions 目录');
+    }
+    
+    // 检查 manifest 文件
+    if (!existsSync(MANIFEST_CHROME)) {
+      logError('Chrome manifest.json 不存在');
+      process.exit(1);
+    }
+    if (!existsSync(MANIFEST_FIREFOX)) {
+      logWarning('Firefox manifest.firefox.json 不存在，将只构建 Chrome 版本');
+    }
 
     // 步骤 2: 清理旧的构建产物
-    logStep('2/5', '清理旧的构建产物');
+    logStep('2/6', '清理旧的构建产物');
     if (existsSync(DIST_DIR)) {
       log('  删除旧的 dist 目录...', colors.yellow);
       await rm(DIST_DIR, { recursive: true, force: true });
@@ -165,10 +194,20 @@ async function main() {
     } else {
       log('  没有旧的构建产物需要清理', colors.yellow);
     }
+    
+    // 删除旧的 ZIP 文件
+    if (existsSync(OUTPUT_CHROME_ZIP)) {
+      await rm(OUTPUT_CHROME_ZIP, { force: true });
+      log('  已删除旧的 Chrome ZIP', colors.yellow);
+    }
+    if (existsSync(OUTPUT_FIREFOX_ZIP)) {
+      await rm(OUTPUT_FIREFOX_ZIP, { force: true });
+      log('  已删除旧的 Firefox ZIP', colors.yellow);
+    }
 
     // 步骤 3: 构建扩展
-    logStep('3/5', '构建浏览器扩展');
-    if (!runCommand('npm run build')) {
+    logStep('3/6', '构建浏览器扩展');
+    if (!runCommand('npm run build:only')) {
       logError('构建失败');
       process.exit(1);
     }
@@ -184,32 +223,51 @@ async function main() {
     const distSize = await getDirectorySize(DIST_DIR);
     log(`  构建产物大小: ${formatSize(distSize)}`, colors.yellow);
 
-    // 步骤 4: 创建 ZIP 压缩包
-    logStep('4/5', '创建 ZIP 压缩包');
-    
-    // 删除旧的 ZIP 文件
-    if (existsSync(OUTPUT_ZIP)) {
-      log('  删除旧的 ZIP 文件...', colors.yellow);
-      await rm(OUTPUT_ZIP, { force: true });
+    // 步骤 4: 创建 Chrome 版本 ZIP
+    logStep('4/6', '创建 Chrome 版本 ZIP');
+    log('  正在压缩 Chrome 版本...', colors.yellow);
+    const chromeZipSize = await createZip(DIST_DIR, OUTPUT_CHROME_ZIP, null);
+    logSuccess(`Chrome ZIP 创建成功: ${OUTPUT_CHROME_ZIP}`);
+    log(`  压缩包大小: ${formatSize(chromeZipSize)}`, colors.yellow);
+    log(`  压缩率: ${((1 - chromeZipSize / distSize) * 100).toFixed(2)}%`, colors.yellow);
+
+    // 步骤 5: 创建 Firefox 版本 ZIP
+    logStep('5/6', '创建 Firefox 版本 ZIP');
+    if (existsSync(MANIFEST_FIREFOX)) {
+      log('  正在压缩 Firefox 版本...', colors.yellow);
+      const firefoxZipSize = await createZip(DIST_DIR, OUTPUT_FIREFOX_ZIP, MANIFEST_FIREFOX);
+      logSuccess(`Firefox ZIP 创建成功: ${OUTPUT_FIREFOX_ZIP}`);
+      log(`  压缩包大小: ${formatSize(firefoxZipSize)}`, colors.yellow);
+      log(`  压缩率: ${((1 - firefoxZipSize / distSize) * 100).toFixed(2)}%`, colors.yellow);
+    } else {
+      logWarning('跳过 Firefox 版本（manifest.firefox.json 不存在）');
     }
 
-    log('  正在压缩...', colors.yellow);
-    const zipSize = await createZip(DIST_DIR, OUTPUT_ZIP);
-    logSuccess(`ZIP 文件创建成功: ${OUTPUT_ZIP}`);
-    log(`  压缩包大小: ${formatSize(zipSize)}`, colors.yellow);
-    log(`  压缩率: ${((1 - zipSize / distSize) * 100).toFixed(2)}%`, colors.yellow);
-
-    // 步骤 5: 验证结果
-    logStep('5/5', '验证结果');
-    if (existsSync(OUTPUT_ZIP)) {
-      const stats = await stat(OUTPUT_ZIP);
-      logSuccess('扩展包已成功打包');
-      log(`  文件路径: ${OUTPUT_ZIP}`, colors.yellow);
+    // 步骤 6: 验证结果
+    logStep('6/6', '验证结果');
+    
+    // 验证 Chrome 版本
+    if (existsSync(OUTPUT_CHROME_ZIP)) {
+      const stats = await stat(OUTPUT_CHROME_ZIP);
+      logSuccess('Chrome 扩展包已成功打包');
+      log(`  文件路径: ${OUTPUT_CHROME_ZIP}`, colors.yellow);
       log(`  文件大小: ${formatSize(stats.size)}`, colors.yellow);
-      log(`  修改时间: ${stats.mtime.toLocaleString('zh-CN')}`, colors.yellow);
     } else {
-      logError('ZIP 文件创建失败');
+      logError('Chrome ZIP 文件创建失败');
       process.exit(1);
+    }
+    
+    // 验证 Firefox 版本
+    if (existsSync(MANIFEST_FIREFOX)) {
+      if (existsSync(OUTPUT_FIREFOX_ZIP)) {
+        const stats = await stat(OUTPUT_FIREFOX_ZIP);
+        logSuccess('Firefox 扩展包已成功打包');
+        log(`  文件路径: ${OUTPUT_FIREFOX_ZIP}`, colors.yellow);
+        log(`  文件大小: ${formatSize(stats.size)}`, colors.yellow);
+      } else {
+        logError('Firefox ZIP 文件创建失败');
+        process.exit(1);
+      }
     }
 
     // 完成
@@ -218,13 +276,17 @@ async function main() {
     log('='.repeat(60) + '\n', colors.green + colors.bright);
 
     log('下一步操作:', colors.bright);
+    log('\n开发测试:');
     log('  1. 在浏览器中打开扩展管理页面');
+    log('     Chrome/Edge: chrome://extensions/');
+    log('     Firefox: about:debugging#/runtime/this-firefox');
     log('  2. 启用"开发者模式"');
     log('  3. 点击"加载已解压的扩展程序"');
     log(`  4. 选择目录: ${DIST_DIR}`);
-    log('\n或者:');
-    log('  用户可以从 TMarks 网站下载 tmarks-extension.zip');
-    log('  解压后加载到浏览器\n');
+    log('\n用户下载:');
+    log('  Chrome/Edge 用户: 下载 tmarks-extension-chrome.zip');
+    log('  Firefox 用户: 下载 tmarks-extension-firefox.zip');
+    log(`  下载地址: /extensions/tmarks-extension-[chrome|firefox].zip\n`);
 
   } catch (error) {
     logError(`发生错误: ${error.message}`);
