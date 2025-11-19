@@ -30,7 +30,7 @@ export function ExtensionPage() {
         <h2 className="text-xl font-bold mb-4 text-center" style={{ color: 'var(--foreground)' }}>
           选择你的浏览器下载
         </h2>
-        
+
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
           {/* Chrome */}
           <div className="text-center p-3 rounded-xl border-2 transition-all" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
@@ -167,7 +167,7 @@ export function ExtensionPage() {
             版本：1.0.0 | 大小：约 258 KB | 更新时间：2024-11-19
           </p>
           <p className="text-xs mt-2" style={{ color: 'var(--muted-foreground)' }}>
-            💡 提供 8 个浏览器专用版本，也可以使用 Chrome 通用版（支持所有 Chromium 内核浏览器）
+            💡 提供 8 个浏览器专用版本，也可以使用 Chrome 通用版（支持所有基于 Chrome 的浏览器）
           </p>
         </div>
       </div>
@@ -356,7 +356,7 @@ export function ExtensionPage() {
               Q: 插件支持哪些浏览器？
             </h3>
             <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-              A: 支持 Chrome、Edge、Firefox、Brave、Opera 等主流浏览器。Chrome 和 Edge 使用同一个版本（Chromium 内核），Firefox 使用专用版本。
+              A: 支持 Chrome、Edge、Firefox、Brave、Opera 等主流浏览器。Chrome 和 Edge 使用同一个版本（基于相同技术），Firefox 使用专用版本。
             </p>
           </div>
           <div>
@@ -364,7 +364,7 @@ export function ExtensionPage() {
               Q: Chrome 和 Edge 可以用同一个版本吗？
             </h3>
             <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-              A: 是的！Chrome、Edge、Brave、Opera 等基于 Chromium 内核的浏览器都使用 Chrome 版本。只有 Firefox 需要下载专用版本。
+              A: 是的！Chrome、Edge、Brave、Opera 等浏览器都使用 Chrome 版本。只有 Firefox 需要下载专用版本。
             </p>
           </div>
           <div>
