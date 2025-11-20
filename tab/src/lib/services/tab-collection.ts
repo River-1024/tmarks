@@ -107,8 +107,9 @@ export async function collectCurrentWindowTabs(
         groupId: response.data.tab_group.id,
         message: `成功收纳 ${validTabs.length} 个标签页`,
       };
-    } catch (error: any) {
-      console.error('Failed to sync tab group to TMarks:', error);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Failed to sync tab group to TMarks:', errorMessage);
 
       // Return success with offline flag
       return {
@@ -118,11 +119,12 @@ export async function collectCurrentWindowTabs(
         message: `已离线保存 ${validTabs.length} 个标签页`,
       };
     }
-  } catch (error: any) {
-    console.error('Failed to collect tabs:', error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '收纳标签页失败';
+    console.error('Failed to collect tabs:', errorMessage);
     return {
       success: false,
-      error: error.message || '收纳标签页失败',
+      error: errorMessage,
     };
   }
 }
@@ -193,8 +195,9 @@ export async function restoreTabGroup(groupId: number, inNewWindow: boolean = tr
         chrome.tabs.create({ url, active: false });
       }
     }
-  } catch (error: any) {
-    console.error('Failed to restore tab group:', error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Failed to restore tab group:', errorMessage);
     throw error;
   }
 }

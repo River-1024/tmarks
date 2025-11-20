@@ -164,7 +164,7 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
           .bind(...bookmark_ids, userId)
           .all<{ id: string }>()
 
-        const validBookmarkIds = verifyResult.results.map((row: any) => row.id)
+        const validBookmarkIds = verifyResult.results.map((row: { id: string }) => row.id)
 
         if (validBookmarkIds.length === 0) {
           return new Response(
@@ -206,7 +206,7 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
             .bind(...add_tag_ids, userId)
             .all<{ id: string }>()
 
-          const validTagIds = tagsResult.results.map((row: any) => row.id)
+          const validTagIds = tagsResult.results.map((row: { id: string }) => row.id)
 
           if (validTagIds.length > 0) {
             // Insert bookmark_tags (ignore duplicates)

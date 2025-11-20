@@ -379,7 +379,7 @@ export function TagSidebar({
           {!isTagLoading && orderedTags.length > 0 && (
             <div
               className={`${tagLayout === 'masonry'
-                ? 'flex flex-wrap items-start gap-2 justify-around'
+                ? 'flex flex-wrap items-start gap-2 justify-between'
                 : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 justify-center'
                 }`}
             >

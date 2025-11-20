@@ -21,7 +21,7 @@ export interface Bookmark {
 
 export interface Metadata {
   key: string;
-  value: any;
+  value: unknown;
   updatedAt: number;
 }
 
@@ -170,6 +170,7 @@ export interface BookmarkInput {
   description?: string;
   tags: string[];
   thumbnail?: string;
+  favicon?: string;
   isPublic?: boolean;
 }
 
@@ -216,7 +217,7 @@ export class AppError extends Error {
   constructor(
     public code: ErrorCode,
     message: string,
-    public details?: any
+    public details?: unknown
   ) {
     super(message);
     this.name = 'AppError';

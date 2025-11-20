@@ -1,39 +1,40 @@
 import { useState } from 'react'
-import { Key, Copy, Trash2, Plus } from 'lucide-react'
-import { useApiKeys, useCreateApiKey, useRevokeApiKey } from '@/hooks/useApiKeys'
+import { Key, Copy, Trash2, Plus, Eye, Ban, Info, AlertTriangle } from 'lucide-react'
+import { useApiKeys, useRevokeApiKey, useDeleteApiKey } from '@/hooks/useApiKeys'
 import { useToastStore } from '@/stores/toastStore'
+import { CreateApiKeyModal } from '@/components/api-keys/CreateApiKeyModal'
+import { ApiKeyDetailModal } from '@/components/api-keys/ApiKeyDetailModal'
 import type { ApiKey } from '@/services/api-keys'
+import { InfoBox } from '../InfoBox'
 
 export function ApiSettingsTab() {
   const { data, isLoading } = useApiKeys()
-  const createApiKey = useCreateApiKey()
   const revokeApiKey = useRevokeApiKey()
+  const deleteApiKey = useDeleteApiKey()
   const { addToast } = useToastStore()
-  const [newKeyName, setNewKeyName] = useState('')
-
-  const handleCreate = async () => {
-    if (!newKeyName.trim()) {
-      addToast('error', '请输入 API Key 名称')
-      return
-    }
-
-    try {
-      await createApiKey.mutateAsync({ name: newKeyName.trim() })
-      setNewKeyName('')
-      addToast('success', 'API Key 创建成功')
-    } catch {
-      addToast('error', '创建失败')
-    }
-  }
+  
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [selectedKey, setSelectedKey] = useState<ApiKey | null>(null)
 
   const handleRevoke = async (id: string) => {
-    if (!confirm('确定要撤销这个 API Key 吗？此操作不可恢复。')) return
+    if (!confirm('确定要撤销此 API Key 吗？撤销后无法恢复。')) return
 
     try {
       await revokeApiKey.mutateAsync(id)
       addToast('success', 'API Key 已撤销')
     } catch {
       addToast('error', '撤销失败')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('确定要彻底删除此 API Key 吗？该操作不可恢复，并会清除所有使用记录。')) return
+
+    try {
+      await deleteApiKey.mutateAsync(id)
+      addToast('success', 'API Key 已永久删除')
+    } catch {
+      addToast('error', '删除失败')
     }
   }
 
@@ -50,55 +51,75 @@ export function ApiSettingsTab() {
     )
   }
 
+  const keys = data?.keys || []
+  const quota = data?.quota || { used: 0, limit: 3 }
+
   return (
     <div className="space-y-6">
       {/* API Keys 管理 */}
       <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-foreground">API Keys</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            创建和管理 API 密钥，用于第三方应用访问
-          </p>
-        </div>
-
-        {/* 创建新 Key */}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newKeyName}
-            onChange={(e) => setNewKeyName(e.target.value)}
-            placeholder="输入 API Key 名称..."
-            className="input flex-1"
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-          />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex-1">
+            <h3 className="text-base sm:text-lg font-semibold text-foreground">API Keys 管理</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              创建和管理 API 密钥，用于第三方应用访问
+            </p>
+          </div>
           <button
-            onClick={handleCreate}
-            disabled={createApiKey.isPending}
-            className="btn btn-primary flex items-center gap-2"
+            onClick={() => setShowCreateModal(true)}
+            disabled={quota.used >= quota.limit}
+            className="btn btn-primary btn-sm sm:btn flex items-center gap-2 justify-center"
           >
             <Plus className="w-4 h-4" />
             创建
           </button>
         </div>
 
+        {/* 配额信息 */}
+        <div className="p-3 bg-muted/30 border border-border rounded-lg">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">当前使用</span>
+            <span className="font-medium">
+              {quota.used} / {quota.limit >= 999 ? '无限制' : quota.limit}
+            </span>
+          </div>
+        </div>
+
         {/* Keys 列表 */}
         <div className="space-y-3">
-          {data?.keys?.length === 0 ? (
+          {keys.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Key className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">暂无 API Key</p>
+              <p className="text-sm mb-4">还没有创建任何 API Key</p>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="btn btn-primary"
+              >
+                创建第一个 API Key
+              </button>
             </div>
           ) : (
-            data?.keys?.map((key: ApiKey) => (
+            keys.map((key: ApiKey) => (
               <div
                 key={key.id}
-                className="p-4 rounded-lg border border-border bg-card"
+                className={`p-4 rounded-lg border ${
+                  key.status === 'revoked'
+                    ? 'border-error/30 bg-error/5'
+                    : 'border-border bg-card'
+                }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2">
-                      <Key className="w-4 h-4 text-primary flex-shrink-0" />
+                      <Key className={`w-4 h-4 flex-shrink-0 ${
+                        key.status === 'revoked' ? 'text-error' : 'text-primary'
+                      }`} />
                       <span className="font-medium">{key.name}</span>
+                      {key.status === 'revoked' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-error/20 text-error">
+                          已撤销
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 mb-2">
                       <code className="text-xs bg-muted px-2 py-1 rounded font-mono flex-1 truncate">
@@ -112,16 +133,38 @@ export function ApiSettingsTab() {
                         <Copy className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      创建于 {new Date(key.created_at).toLocaleString()}
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>创建于 {new Date(key.created_at).toLocaleString()}</span>
+                      {key.last_used_at && (
+                        <span>最后使用 {new Date(key.last_used_at).toLocaleString()}</span>
+                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleRevoke(key.id)}
-                    className="p-2 text-error hover:bg-error/10 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setSelectedKey(key)}
+                      className="p-2 hover:bg-muted rounded-lg transition-colors"
+                      title="查看详情"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    {key.status === 'active' && (
+                      <button
+                        onClick={() => handleRevoke(key.id)}
+                        className="p-2 text-warning hover:bg-warning/10 rounded-lg transition-colors"
+                        title="撤销"
+                      >
+                        <Ban className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(key.id)}
+                      className="p-2 text-error hover:bg-error/10 rounded-lg transition-colors"
+                      title="删除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -131,24 +174,37 @@ export function ApiSettingsTab() {
 
       <div className="border-t border-border"></div>
 
-      {/* 提示信息 */}
-      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-        <div className="flex items-start gap-2">
-          <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <div>
-            <h4 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
-              安全提示
-            </h4>
-            <ul className="text-xs text-yellow-800 dark:text-yellow-200 space-y-1">
-              <li>• API Key 创建后请立即保存，之后将无法再次查看完整密钥</li>
-              <li>• 不要在公开场合分享你的 API Key</li>
-              <li>• 如果 API Key 泄露，请立即撤销并创建新的</li>
-            </ul>
-          </div>
-        </div>
+      {/* 使用说明 */}
+      <div className="space-y-3">
+        <InfoBox icon={Info} title="使用说明" variant="info">
+          <ul className="space-y-1">
+            <li>• API Keys 用于第三方应用（如浏览器插件）安全访问您的数据</li>
+            <li>• 每个账户最多创建 {quota.limit >= 999 ? '无限制' : `${quota.limit} 个`} API Key</li>
+            <li>• 创建后仅显示一次完整密钥，请妥善保存</li>
+          </ul>
+        </InfoBox>
+
+        <InfoBox icon={AlertTriangle} title="安全提示" variant="warning">
+          <ul className="space-y-1">
+            <li>• 不要在公开场合分享你的 API Key</li>
+            <li>• 如果 API Key 泄露，请立即撤销并创建新的</li>
+            <li>• 撤销后的 Key 无法恢复，但可以删除以清理记录</li>
+          </ul>
+        </InfoBox>
       </div>
+
+      {/* 创建 API Key 模态框 */}
+      {showCreateModal && (
+        <CreateApiKeyModal onClose={() => setShowCreateModal(false)} />
+      )}
+
+      {/* API Key 详情模态框 */}
+      {selectedKey && (
+        <ApiKeyDetailModal
+          apiKey={selectedKey}
+          onClose={() => setSelectedKey(null)}
+        />
+      )}
     </div>
   )
 }

@@ -48,13 +48,13 @@ export abstract class AIProvider {
   /**
    * Handle errors uniformly
    */
-  protected handleError(error: any, provider: string): AppError {
+  protected handleError(error: unknown, provider: string): AppError {
     if (error instanceof AppError) {
       return error;
     }
 
     // Network errors
-    if (error instanceof TypeError || error.name === 'NetworkError') {
+    if (error instanceof TypeError || (error && typeof error === 'object' && 'name' in error && error.name === 'NetworkError')) {
       return new AppError(
         'NETWORK_ERROR' as ErrorCode,
         `Network error when calling ${provider}`,
@@ -63,27 +63,34 @@ export abstract class AIProvider {
     }
 
     // API key errors
-    if (error.status === 401 || error.status === 403) {
-      return new AppError(
-        'API_KEY_INVALID' as ErrorCode,
-        `Invalid API key for ${provider}`,
-        { status: error.status }
-      );
-    }
+    if (error && typeof error === 'object' && 'status' in error) {
+      const errorWithStatus = error as { status: number; message?: string };
+      if (errorWithStatus.status === 401 || errorWithStatus.status === 403) {
+        return new AppError(
+          'API_KEY_INVALID' as ErrorCode,
+          `Invalid API key for ${provider}`,
+          { status: errorWithStatus.status }
+        );
+      }
 
-    // Rate limit errors
-    if (error.status === 429) {
-      return new AppError(
-        'RATE_LIMIT_ERROR' as ErrorCode,
-        `Rate limit exceeded for ${provider}`,
-        { status: error.status }
-      );
+      // Rate limit errors
+      if (errorWithStatus.status === 429) {
+        return new AppError(
+          'RATE_LIMIT_ERROR' as ErrorCode,
+          `Rate limit exceeded for ${provider}`,
+          { status: errorWithStatus.status }
+        );
+      }
     }
 
     // Generic AI service error
+    const errorMessage = error && typeof error === 'object' && 'message' in error 
+      ? String((error as { message: unknown }).message)
+      : 'Unknown error';
+    
     return new AppError(
       'AI_SERVICE_ERROR' as ErrorCode,
-      `AI service error (${provider}): ${error.message || 'Unknown error'}`,
+      `AI service error (${provider}): ${errorMessage}`,
       { originalError: error }
     );
   }
@@ -107,11 +114,15 @@ export abstract class AIProvider {
       }
 
       // Validate tag format
-      const tags = parsed.suggestedTags.map((tag: any) => {
+      const tags = parsed.suggestedTags.map((tag: unknown) => {
+        if (!tag || typeof tag !== 'object') {
+          return { name: '', isNew: true, confidence: 0.5 };
+        }
+        const tagObj = tag as Record<string, unknown>;
         const processedTag = {
-          name: tag.name || '',
-          isNew: tag.isNew ?? true,
-          confidence: tag.confidence ?? 0.5
+          name: typeof tagObj.name === 'string' ? tagObj.name : '',
+          isNew: typeof tagObj.isNew === 'boolean' ? tagObj.isNew : true,
+          confidence: typeof tagObj.confidence === 'number' ? tagObj.confidence : 0.5
         };
         // Debug: 输出每个标签的 isNew 值
         console.log(`[Tag] ${processedTag.name} - isNew: ${processedTag.isNew}`);

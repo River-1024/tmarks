@@ -38,11 +38,23 @@ export const useThemeStore = create<ThemeStore>()(
 
 // 监听系统主题变化（仅在未设置过主题时跟随系统）
 if (typeof window !== 'undefined') {
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  const handleThemeChange = (e: MediaQueryListEvent) => {
     const storedTheme = localStorage.getItem('theme-storage')
     // 如果用户没有手动设置过主题，则跟随系统
     if (!storedTheme) {
       useThemeStore.getState().setTheme(e.matches ? 'dark' : 'light')
     }
-  })
+  }
+  
+  // 添加监听器
+  if (mediaQuery.addEventListener) {
+    mediaQuery.addEventListener('change', handleThemeChange)
+  } else {
+    // 兼容旧版浏览器
+    mediaQuery.addListener(handleThemeChange)
+  }
+  
+  // 注意：由于这是全局store，通常不需要清理
+  // 如果需要清理，可以导出清理函数供应用卸载时调用
 }

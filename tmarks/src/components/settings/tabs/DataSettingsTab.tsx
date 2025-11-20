@@ -1,8 +1,42 @@
-import { Database, Download, Upload, Trash2, FileJson, FileCode, AlertTriangle } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { Database, Download, Upload, FileJson, FileCode } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { ExportSection } from '@/components/import-export/ExportSection'
+import { ImportSection } from '@/components/import-export/ImportSection'
+import { BOOKMARKS_QUERY_KEY } from '@/hooks/useBookmarks'
+import { TAGS_QUERY_KEY } from '@/hooks/useTags'
+import type { ExportFormat, ExportOptions, ImportResult } from '@shared/import-export-types'
 
 export function DataSettingsTab() {
-  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState<'export' | 'import'>('export')
+  const [lastOperation, setLastOperation] = useState<{
+    type: 'export' | 'import'
+    timestamp: string
+    details: string
+  } | null>(null)
+
+  // 处理导出完成
+  const handleExportComplete = (format: ExportFormat, options: ExportOptions) => {
+    setLastOperation({
+      type: 'export',
+      timestamp: new Date().toLocaleString(),
+      details: `导出为 ${format.toUpperCase()} 格式${options.include_tags ? '，包含标签' : ''}${options.include_metadata ? '，包含元数据' : ''}`
+    })
+  }
+
+  // 处理导入完成
+  const handleImportComplete = (result: ImportResult) => {
+    setLastOperation({
+      type: 'import',
+      timestamp: new Date().toLocaleString(),
+      details: `成功导入 ${result.success} 个书签，创建 ${result.created_tags.length} 个标签${result.failed > 0 ? `，${result.failed} 个失败` : ''}`
+    })
+
+    // 刷新书签和标签缓存
+    queryClient.invalidateQueries({ queryKey: [BOOKMARKS_QUERY_KEY] })
+    queryClient.invalidateQueries({ queryKey: [TAGS_QUERY_KEY] })
+  }
 
   return (
     <div className="space-y-6">
@@ -15,57 +49,74 @@ export function DataSettingsTab() {
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          {/* 导出数据 */}
+        {/* 标签页切换 */}
+        <div className="flex gap-2 border-b border-border">
           <button
-            onClick={() => navigate('/import-export')}
-            className="p-6 rounded-xl border-2 border-border hover:border-primary/50 transition-all text-left group hover:shadow-md"
+            onClick={() => setActiveTab('export')}
+            className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'export'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                <Download className="w-6 h-6 text-primary" />
-              </div>
-              <div className="text-base font-semibold text-foreground">导出数据</div>
-            </div>
-            <div className="text-sm text-muted-foreground mb-3">
-              将书签导出为文件，支持多种格式
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs">
-                <FileJson className="w-3 h-3" />
-                JSON
-              </span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs">
-                <FileCode className="w-3 h-3" />
-                HTML
-              </span>
-            </div>
+            <Download className="w-4 h-4" />
+            导出数据
           </button>
-
-          {/* 导入数据 */}
           <button
-            onClick={() => navigate('/import-export')}
-            className="p-6 rounded-xl border-2 border-border hover:border-primary/50 transition-all text-left group hover:shadow-md"
+            onClick={() => setActiveTab('import')}
+            className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'import'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-lg bg-success/10 group-hover:bg-success/20 transition-colors">
-                <Upload className="w-6 h-6 text-success" />
-              </div>
-              <div className="text-base font-semibold text-foreground">导入数据</div>
-            </div>
-            <div className="text-sm text-muted-foreground mb-3">
-              从浏览器或其他来源导入书签
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs">
-                浏览器书签
-              </span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs">
-                JSON/HTML
-              </span>
-            </div>
+            <Upload className="w-4 h-4" />
+            导入数据
           </button>
         </div>
+
+        {/* 内容区域 */}
+        <div className="p-4 rounded-lg border border-border bg-card">
+          {activeTab === 'export' && (
+            <ExportSection onExport={handleExportComplete} />
+          )}
+
+          {activeTab === 'import' && (
+            <ImportSection onImport={handleImportComplete} />
+          )}
+        </div>
+
+        {/* 最近操作 */}
+        {lastOperation && (
+          <div className="p-4 rounded-lg border border-border bg-card">
+            <div className="flex items-start gap-3">
+              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                lastOperation.type === 'export'
+                  ? 'bg-primary/10 text-primary'
+                  : 'bg-success/10 text-success'
+              }`}>
+                {lastOperation.type === 'export' ? (
+                  <Download className="w-4 h-4" />
+                ) : (
+                  <Upload className="w-4 h-4" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-foreground text-sm">
+                    {lastOperation.type === 'export' ? '数据导出' : '数据导入'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {lastOperation.timestamp}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {lastOperation.details}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-border"></div>
@@ -146,99 +197,7 @@ export function DataSettingsTab() {
         </div>
       </div>
 
-      <div className="border-t border-border"></div>
 
-      {/* 存储信息 */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-foreground">存储信息</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            查看当前数据使用情况
-          </p>
-        </div>
-
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
-            <div className="text-2xl font-bold text-primary mb-1">-</div>
-            <div className="text-xs text-muted-foreground">书签总数</div>
-          </div>
-          <div className="p-4 rounded-lg bg-gradient-to-br from-success/10 to-success/5 border border-success/20">
-            <div className="text-2xl font-bold text-success mb-1">-</div>
-            <div className="text-xs text-muted-foreground">标签总数</div>
-          </div>
-          <div className="p-4 rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20">
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">-</div>
-            <div className="text-xs text-muted-foreground">存储空间</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-border"></div>
-
-      {/* 危险操作 */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-error">危险操作</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            这些操作不可恢复，请谨慎使用
-          </p>
-        </div>
-
-        <div className="p-4 rounded-lg border-2 border-error/20 bg-error/5">
-          <div className="flex items-start gap-3">
-            <Trash2 className="w-5 h-5 text-error flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <div className="text-sm font-medium mb-1">清空所有数据</div>
-              <div className="text-xs text-muted-foreground mb-3">
-                删除所有书签、标签和相关数据，此操作不可恢复
-              </div>
-              <button className="btn btn-sm bg-error text-white hover:bg-error/90">
-                清空数据
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-border"></div>
-
-      {/* 注意事项 */}
-      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-        <div className="flex items-start gap-2">
-          <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
-              注意事项
-            </h4>
-            <ul className="text-xs text-yellow-800 dark:text-yellow-200 space-y-1">
-              <li>• 导入前建议先导出当前数据作为备份</li>
-              <li>• 大文件导入可能需要较长时间，请耐心等待</li>
-              <li>• 导入过程中请勿关闭页面</li>
-              <li>• 如遇到问题，可查看错误详情进行排查</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-border"></div>
-
-      {/* 使用提示 */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex items-start gap-2">
-          <Database className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-              数据管理建议
-            </h4>
-            <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
-              <li>• 建议定期导出数据作为备份（推荐每月一次）</li>
-              <li>• 导入数据时会自动去重，不会产生重复书签</li>
-              <li>• 所有数据都存储在云端，可以在多设备间同步</li>
-              <li>• JSON 格式保留最完整的数据，HTML 格式兼容性最好</li>
-            </ul>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

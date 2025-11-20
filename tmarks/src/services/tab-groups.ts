@@ -95,7 +95,20 @@ export const tabGroupsService = {
     itemId: string,
     data: { title?: string; is_pinned?: number; is_todo?: number; is_archived?: number; position?: number }
   ) {
-    const response = await apiClient.patch<{ item: any }>(`/../tab-groups/items/${itemId}`, data)
+    interface UpdateItemResponse {
+      item: {
+        id: string
+        title: string
+        url: string
+        favicon?: string
+        position: number
+        is_pinned?: number
+        is_todo?: number
+        is_archived?: number
+        created_at: string
+      }
+    }
+    const response = await apiClient.patch<UpdateItemResponse>(`/../tab-groups/items/${itemId}`, data)
     return response.data!.item
   },
 
@@ -110,7 +123,20 @@ export const tabGroupsService = {
    * 移动标签页项到其他分组
    */
   async moveTabGroupItem(itemId: string, targetGroupId: string, position?: number) {
-    const response = await apiClient.post<{ item: any }>(
+    interface MoveItemResponse {
+      item: {
+        id: string
+        title: string
+        url: string
+        favicon?: string
+        position: number
+        is_pinned?: number
+        is_todo?: number
+        is_archived?: number
+        created_at: string
+      }
+    }
+    const response = await apiClient.post<MoveItemResponse>(
       `/../tab-groups/items/${itemId}/move`,
       {
         target_group_id: targetGroupId,
@@ -124,12 +150,20 @@ export const tabGroupsService = {
    * 批量添加标签页项到分组
    */
   async addItemsToGroup(groupId: string, items: Array<{ title: string; url: string; favicon?: string }>) {
-    const response = await apiClient.post<{
+    interface BatchAddResponse {
       message: string
       added_count: number
       total_items: number
-      items: any[]
-    }>(`/../tab-groups/${groupId}/items/batch`, { items })
+      items: Array<{
+        id: string
+        title: string
+        url: string
+        favicon?: string
+        position: number
+        created_at: string
+      }>
+    }
+    const response = await apiClient.post<BatchAddResponse>(`/../tab-groups/${groupId}/items/batch`, { items })
     return response.data!
   },
 

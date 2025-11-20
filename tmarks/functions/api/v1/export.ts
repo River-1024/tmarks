@@ -157,15 +157,17 @@ async function collectUserData(db: D1Database, userId: string): Promise<TMarksEx
 
     // 构建书签标签映射
     const bookmarkTagMap = new Map<string, string[]>()
-    bookmarkTags?.forEach((bt: any) => {
-      if (!bookmarkTagMap.has(bt.bookmark_id)) {
-        bookmarkTagMap.set(bt.bookmark_id, [])
+    bookmarkTags?.forEach((bt: Record<string, unknown>) => {
+      const bookmarkId = String(bt.bookmark_id)
+      const tagName = String(bt.tag_name)
+      if (!bookmarkTagMap.has(bookmarkId)) {
+        bookmarkTagMap.set(bookmarkId, [])
       }
-      bookmarkTagMap.get(bt.bookmark_id)!.push(bt.tag_name)
+      bookmarkTagMap.get(bookmarkId)!.push(tagName)
     })
 
     // 构建导出数据
-    const exportBookmarks: ExportBookmark[] = (bookmarks || []).map((bookmark: any) => ({
+    const exportBookmarks: ExportBookmark[] = (bookmarks || []).map((bookmark: Record<string, unknown>) => ({
       id: bookmark.id,
       title: bookmark.title,
       url: bookmark.url,
@@ -179,7 +181,7 @@ async function collectUserData(db: D1Database, userId: string): Promise<TMarksEx
       last_clicked_at: bookmark.last_clicked_at
     }))
 
-    const exportTags: ExportTag[] = (tags || []).map((tag: any) => ({
+    const exportTags: ExportTag[] = (tags || []).map((tag: Record<string, unknown>) => ({
       id: tag.id,
       name: tag.name,
       color: tag.color,
@@ -278,7 +280,7 @@ async function getExportStats(db: D1Database, userId: string) {
   }
 }
 
-function estimateExportSize(stats: any, format: ExportFormat): number {
+function estimateExportSize(stats: { total_bookmarks: number; total_tags: number; pinned_bookmarks: number }, format: ExportFormat): number {
   const avgBookmarkSize = format === 'json' ? 200 : 150 // bytes per bookmark
   const avgTagSize = format === 'json' ? 50 : 30 // bytes per tag
   

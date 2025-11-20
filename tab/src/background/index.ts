@@ -224,11 +224,12 @@ async function handleMessage(
             console.error('[Background] Content script injection verification failed:', verifyError);
             return await getBasicPageInfo(tab.id);
           }
-        } catch (injectError: any) {
-          console.error('[Background] Failed to inject content script:', injectError);
+        } catch (injectError) {
+          const errorMessage = injectError instanceof Error ? injectError.message : 'Unknown error';
+          console.error('[Background] Failed to inject content script:', errorMessage);
           
           // 检查是否是权限问题
-          if (injectError.message?.includes('Cannot access')) {
+          if (errorMessage.includes('Cannot access')) {
             console.warn('[Background] No permission to inject script on this page');
           }
           

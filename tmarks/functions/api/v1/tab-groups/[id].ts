@@ -101,7 +101,7 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[
 
       // Build update query
       const updates: string[] = []
-      const params: any[] = []
+      const params: Array<string | number> = []
 
       if (body.title !== undefined) {
         updates.push('title = ?')

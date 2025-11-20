@@ -30,7 +30,7 @@ export class BookmarkDB extends Dexie {
   // Helper methods
   async getLastSyncTime(): Promise<number> {
     const meta = await this.metadata.get('lastSync');
-    return meta ? meta.value : 0;
+    return meta && typeof meta.value === 'number' ? meta.value : 0;
   }
 
   async updateLastSyncTime(timestamp: number): Promise<void> {

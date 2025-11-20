@@ -194,7 +194,7 @@ export function sanitizePaginationParams(params: {
   const page = Math.max(1, parseInt(String(params.page || 1)))
   const pageSize = Math.min(100, Math.max(1, parseInt(String(params.pageSize || 30))))
   
-  const result: any = { page, pageSize }
+  const result: { page: number; pageSize: number; cursor?: string } = { page, pageSize }
   
   if (params.cursor && typeof params.cursor === 'string') {
     // 简单验证游标格式（这里假设是 UUID 或数字）

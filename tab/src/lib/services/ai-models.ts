@@ -51,7 +51,12 @@ const fetchOpenAIStyleModels = async (baseUrl: string, apiKey: string): Promise<
   }
 
   const models = json.data
-    .map((item: any) => item?.id)
+    .map((item: unknown) => {
+      if (item && typeof item === 'object' && 'id' in item) {
+        return (item as { id: unknown }).id;
+      }
+      return undefined;
+    })
     .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
 
   if (models.length === 0) {

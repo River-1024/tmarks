@@ -18,10 +18,14 @@ const deployDir = path.join(__dirname, '../.deploy');
 
 console.log('🚀 准备Cloudflare Pages部署...');
 
-// 清理旧的部署目录
+// 清理旧的部署目录（尝试删除，失败则跳过）
 if (fs.existsSync(deployDir)) {
-  fs.rmSync(deployDir, { recursive: true });
-  console.log('✓ 清理旧部署目录');
+  try {
+    fs.rmSync(deployDir, { recursive: true, force: true });
+    console.log('✓ 清理旧部署目录');
+  } catch (error) {
+    console.log('⚠ 无法删除旧目录，将覆盖文件');
+  }
 }
 
 // 创建部署目录

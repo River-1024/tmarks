@@ -43,8 +43,8 @@ export class JsonParser implements ImportParser {
   }
 
   async validate(data: ImportData): Promise<ValidationResult> {
-    const errors: any[] = []
-    const warnings: any[] = []
+    const errors: Array<{ field: string; message: string; value?: unknown }> = []
+    const warnings: Array<{ field: string; message: string; value?: unknown }> = []
 
     // 验证基本结构
     if (!Array.isArray(data.bookmarks)) {
@@ -122,15 +122,18 @@ export class JsonParser implements ImportParser {
     }
   }
 
-  private detectJsonFormat(data: any): string {
+  private detectJsonFormat(data: Record<string, unknown>): string {
     // TMarks 格式检测
     if (data.version && data.exported_at && data.bookmarks && data.tags) {
       return 'tmarks'
     }
 
     // Chrome 书签格式检测
-    if (data.roots && (data.roots.bookmark_bar || data.roots.other)) {
-      return 'chrome'
+    if (data.roots && typeof data.roots === 'object' && data.roots !== null) {
+      const roots = data.roots as Record<string, unknown>
+      if (roots.bookmark_bar || roots.other) {
+        return 'chrome'
+      }
     }
 
     // Firefox 书签格式检测
@@ -173,12 +176,12 @@ export class JsonParser implements ImportParser {
     }
   }
 
-  private parseChromeFormat(data: any): ImportData {
+  private parseChromeFormat(data: Record<string, unknown>): ImportData {
     const bookmarks: ParsedBookmark[] = []
     const tagSet = new Set<string>()
 
     // 递归解析 Chrome 书签结构
-    const parseNode = (node: any, folderPath: string[] = []) => {
+    const parseNode = (node: Record<string, unknown>, folderPath: string[] = []) => {
       if (node.type === 'url') {
         const bookmark: ParsedBookmark = {
           title: node.name || 'Untitled',
@@ -194,23 +197,35 @@ export class JsonParser implements ImportParser {
         if (folderPath.length > 0) {
           tagSet.add(folderPath.join('/'))
         }
-      } else if (node.type === 'folder' && node.children) {
-        const newPath = [...folderPath, node.name]
-        node.children.forEach((child: any) => parseNode(child, newPath))
+      } else if (node.type === 'folder' && Array.isArray(node.children)) {
+        const newPath = [...folderPath, String(node.name || 'Folder')]
+        node.children.forEach((child: unknown) => {
+          if (child && typeof child === 'object') {
+            parseNode(child as Record<string, unknown>, newPath)
+          }
+        })
       }
     }
 
     // 解析书签栏和其他书签
-    if (data.roots.bookmark_bar?.children) {
-      data.roots.bookmark_bar.children.forEach((node: any) => 
-        parseNode(node, ['书签栏'])
-      )
+    const roots = data.roots as Record<string, unknown>
+    const bookmarkBar = roots.bookmark_bar as Record<string, unknown> | undefined
+    const other = roots.other as Record<string, unknown> | undefined
+    
+    if (bookmarkBar?.children && Array.isArray(bookmarkBar.children)) {
+      bookmarkBar.children.forEach((node: unknown) => {
+        if (node && typeof node === 'object') {
+          parseNode(node as Record<string, unknown>, ['书签栏'])
+        }
+      })
     }
 
-    if (data.roots.other?.children) {
-      data.roots.other.children.forEach((node: any) => 
-        parseNode(node, ['其他书签'])
-      )
+    if (other?.children && Array.isArray(other.children)) {
+      other.children.forEach((node: unknown) => {
+        if (node && typeof node === 'object') {
+          parseNode(node as Record<string, unknown>, ['其他书签'])
+        }
+      })
     }
 
     const tags: ParsedTag[] = Array.from(tagSet).map(name => ({
@@ -229,22 +244,22 @@ export class JsonParser implements ImportParser {
     }
   }
 
-  private parseFirefoxFormat(data: any): ImportData {
+  private parseFirefoxFormat(data: Record<string, unknown>): ImportData {
     const bookmarks: ParsedBookmark[] = []
     const tagSet = new Set<string>()
 
     // 递归解析 Firefox 书签结构
-    const parseNode = (node: any, folderPath: string[] = []) => {
+    const parseNode = (node: Record<string, unknown>, folderPath: string[] = []) => {
       if (node.type === 'text/x-moz-place' && node.uri) {
-        const tags = node.tags ? node.tags.split(',').map((t: string) => t.trim()) : []
+        const tags = typeof node.tags === 'string' ? node.tags.split(',').map((t: string) => t.trim()) : []
         if (folderPath.length > 0) {
           tags.push(folderPath.join('/'))
         }
 
         const bookmark: ParsedBookmark = {
-          title: node.title || 'Untitled',
-          url: node.uri,
-          description: node.description,
+          title: String(node.title || 'Untitled'),
+          url: String(node.uri),
+          description: typeof node.description === 'string' ? node.description : undefined,
           tags,
           created_at: this.parseTimestamp(node.dateAdded),
           folder: folderPath.join('/') || undefined
@@ -254,13 +269,21 @@ export class JsonParser implements ImportParser {
         // 添加标签
         tags.forEach(tag => tagSet.add(tag))
       } else if (node.children && Array.isArray(node.children)) {
-        const newPath = node.title ? [...folderPath, node.title] : folderPath
-        node.children.forEach((child: any) => parseNode(child, newPath))
+        const newPath = node.title ? [...folderPath, String(node.title)] : folderPath
+        node.children.forEach((child: unknown) => {
+          if (child && typeof child === 'object') {
+            parseNode(child as Record<string, unknown>, newPath)
+          }
+        })
       }
     }
 
-    if (data.children) {
-      data.children.forEach((node: any) => parseNode(node))
+    if (Array.isArray(data.children)) {
+      data.children.forEach((node: unknown) => {
+        if (node && typeof node === 'object') {
+          parseNode(node as Record<string, unknown>)
+        }
+      })
     }
 
     const tags: ParsedTag[] = Array.from(tagSet).map(name => ({
@@ -279,25 +302,49 @@ export class JsonParser implements ImportParser {
     }
   }
 
-  private parseGenericFormat(data: any): ImportData {
-    let bookmarkArray: any[] = []
+  private parseGenericFormat(data: unknown): ImportData {
+    let bookmarkArray: unknown[] = []
 
     if (Array.isArray(data)) {
       bookmarkArray = data
-    } else if (data.bookmarks && Array.isArray(data.bookmarks)) {
-      bookmarkArray = data.bookmarks
-    } else {
+    } else if (data && typeof data === 'object' && 'bookmarks' in data) {
+      const dataObj = data as Record<string, unknown>
+      if (Array.isArray(dataObj.bookmarks)) {
+        bookmarkArray = dataObj.bookmarks
+      }
+    }
+    
+    if (bookmarkArray.length === 0) {
       throw new Error('Cannot find bookmark array in JSON')
     }
 
-    const bookmarks: ParsedBookmark[] = bookmarkArray.map(item => ({
-      title: item.title || item.name || 'Untitled',
-      url: item.url || item.href || item.link,
-      description: item.description || item.desc || item.note,
-      tags: this.normalizeTags(item.tags || item.categories || []),
-      created_at: item.created_at || item.date || item.timestamp,
-      folder: item.folder || item.category
-    }))
+    const bookmarks: ParsedBookmark[] = bookmarkArray.map(item => {
+      if (!item || typeof item !== 'object') {
+        return {
+          title: 'Untitled',
+          url: '',
+          description: undefined,
+          tags: [],
+          created_at: undefined,
+          folder: undefined
+        }
+      }
+      
+      const bookmark = item as Record<string, unknown>
+      return {
+        title: String(bookmark.title || bookmark.name || 'Untitled'),
+        url: String(bookmark.url || bookmark.href || bookmark.link || ''),
+        description: typeof bookmark.description === 'string' ? bookmark.description : 
+                     typeof bookmark.desc === 'string' ? bookmark.desc :
+                     typeof bookmark.note === 'string' ? bookmark.note : undefined,
+        tags: this.normalizeTags(bookmark.tags || bookmark.categories || []),
+        created_at: typeof bookmark.created_at === 'string' ? bookmark.created_at :
+                    typeof bookmark.date === 'string' ? bookmark.date :
+                    typeof bookmark.timestamp === 'string' ? bookmark.timestamp : undefined,
+        folder: typeof bookmark.folder === 'string' ? bookmark.folder :
+                typeof bookmark.category === 'string' ? bookmark.category : undefined
+      }
+    })
 
     // 提取所有标签
     const tagSet = new Set<string>()
@@ -321,7 +368,7 @@ export class JsonParser implements ImportParser {
     }
   }
 
-  private normalizeTags(tags: any): string[] {
+  private normalizeTags(tags: unknown): string[] {
     if (typeof tags === 'string') {
       return tags.split(',').map(tag => tag.trim()).filter(Boolean)
     }
@@ -331,7 +378,7 @@ export class JsonParser implements ImportParser {
     return []
   }
 
-  private parseTimestamp(timestamp: any): string | undefined {
+  private parseTimestamp(timestamp: unknown): string | undefined {
     if (!timestamp) return undefined
 
     try {

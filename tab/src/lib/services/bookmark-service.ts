@@ -36,11 +36,12 @@ export class BookmarkService {
         success: true,
         bookmarkId: result.id
       };
-    } catch (error: any) {
-      console.error('[BookmarkService] Failed to save bookmark:', error);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[BookmarkService] Failed to save bookmark:', errorMessage);
 
       // Check if it's a duplicate URL error
-      if (error.message && error.message.includes('URL already exists')) {
+      if (errorMessage.includes('URL already exists')) {
         return {
           success: false,
           error: '该网址已经被收藏过了',
@@ -49,7 +50,7 @@ export class BookmarkService {
       }
 
       // Check if it's a network error
-      if (error instanceof Error && error.message.includes('Network')) {
+      if (errorMessage.includes('Network')) {
         // Queue for later sync
         await this.queueForLaterSync(bookmark);
 
@@ -113,10 +114,14 @@ export class BookmarkService {
 
     for (const item of pending) {
       try {
-        await bookmarkAPI.addBookmark(item.value);
-        await db.metadata.delete(item.key);
-        synced++;
-        console.log('[BookmarkService] Synced pending bookmark:', item.value.title);
+        // Type guard to ensure item.value is BookmarkInput
+        if (item.value && typeof item.value === 'object' && 'url' in item.value && 'title' in item.value) {
+          const bookmark = item.value as BookmarkInput;
+          await bookmarkAPI.addBookmark(bookmark);
+          await db.metadata.delete(item.key);
+          synced++;
+          console.log('[BookmarkService] Synced pending bookmark:', bookmark.title);
+        }
       } catch (error) {
         console.error('[BookmarkService] Failed to sync pending bookmark:', error);
       }

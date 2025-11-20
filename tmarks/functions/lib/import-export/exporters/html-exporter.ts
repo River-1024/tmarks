@@ -55,8 +55,8 @@ ${includeMetadata ? this.generateMetadataComment(data) : ''}
     return html
   }
 
-  private organizeBookmarksByFolder(bookmarks: any[], includeTags: boolean): Map<string, any[]> {
-    const folderMap = new Map<string, any[]>()
+  private organizeBookmarksByFolder(bookmarks: Array<Record<string, unknown>>, includeTags: boolean): Map<string, Array<Record<string, unknown>>> {
+    const folderMap = new Map<string, Array<Record<string, unknown>>>()
     
     // 未分类书签
     folderMap.set('未分类', [])
@@ -91,7 +91,7 @@ ${includeMetadata ? this.generateMetadataComment(data) : ''}
     return folderMap
   }
 
-  private generateBookmarkFolders(folderMap: Map<string, any[]>, exportedAt: string): string {
+  private generateBookmarkFolders(folderMap: Map<string, Array<Record<string, unknown>>>, exportedAt: string): string {
     let html = ''
     
     folderMap.forEach((bookmarks, folderName) => {
@@ -110,7 +110,7 @@ ${includeMetadata ? this.generateMetadataComment(data) : ''}
     return html
   }
 
-  private generateBookmarkEntry(bookmark: any): string {
+  private generateBookmarkEntry(bookmark: Record<string, unknown>): string {
     const addDate = bookmark.created_at ? this.toUnixTimestamp(bookmark.created_at) : this.toUnixTimestamp(new Date().toISOString())
     const lastModified = bookmark.updated_at ? this.toUnixTimestamp(bookmark.updated_at) : addDate
     

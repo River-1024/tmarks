@@ -82,19 +82,19 @@ export function GeneralSettingsPage() {
   ]
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <div className="mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6 w-full max-w-full sm:max-w-[95vw] lg:max-w-[61.8vw] xl:max-w-[1400px]">
       {/* 页面标题和操作按钮 */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">通用设置</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">通用设置</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             配置应用的通用行为和用户体验
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           <button
             onClick={handleReset}
-            className="btn btn-secondary flex items-center gap-2"
+            className="btn btn-secondary btn-sm sm:btn flex items-center gap-2"
           >
             <RotateCcw className="w-4 h-4" />
             <span className="hidden sm:inline">重置</span>
@@ -102,16 +102,17 @@ export function GeneralSettingsPage() {
           <button
             onClick={handleSave}
             disabled={updatePreferences.isPending}
-            className="btn btn-primary flex items-center gap-2"
+            className="btn btn-primary btn-sm sm:btn flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
-            {updatePreferences.isPending ? '保存中...' : '保存设置'}
+            <span className="hidden sm:inline">{updatePreferences.isPending ? '保存中...' : '保存设置'}</span>
+            <span className="sm:hidden">保存</span>
           </button>
         </div>
       </div>
 
       {/* 标签页容器 */}
-      <div className="card p-6">
+      <div className="card p-3 sm:p-6">
         <SettingsTabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
           {activeTab === 'basic' && (
             <BasicSettingsTab

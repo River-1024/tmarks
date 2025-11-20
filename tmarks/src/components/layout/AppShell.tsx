@@ -3,13 +3,8 @@ import { useState, useRef, useEffect } from 'react'
 import {
   BookOpen,
   User,
-  Key,
-  Share2,
-  Database,
   LogOut,
   Layers,
-  Shield,
-  Download,
   Settings
 } from 'lucide-react'
 import { useThemeStore } from '@/stores/themeStore'
@@ -130,65 +125,10 @@ export function AppShell() {
                       <Settings className="w-4 h-4" />
                       <span>通用设置</span>
                     </button>
-                    <button
-                      onClick={() => {
-                        navigate('/extension')
-                        setIsUserMenuOpen(false)
-                      }}
-                      className="w-full px-4 py-3 flex items-center gap-2 hover:bg-muted/50 transition-colors duration-200"
-                      style={{color: 'var(--foreground)'}}
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>浏览器插件</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigate('/api-keys')
-                        setIsUserMenuOpen(false)
-                      }}
-                      className="w-full px-4 py-3 flex items-center gap-2 hover:bg-muted/50 transition-colors duration-200"
-                      style={{color: 'var(--foreground)'}}
-                    >
-                      <Key className="w-4 h-4" />
-                      <span>API Keys</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigate('/share-settings')
-                        setIsUserMenuOpen(false)
-                      }}
-                      className="w-full px-4 py-3 flex items-center gap-2 hover:bg-muted/50 transition-colors duration-200"
-                      style={{color: 'var(--foreground)'}}
-                    >
-                      <Share2 className="w-4 h-4" />
-                      <span>公开分享</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigate('/import-export')
-                        setIsUserMenuOpen(false)
-                      }}
-                      className="w-full px-4 py-3 flex items-center gap-2 hover:bg-muted/50 transition-colors duration-200"
-                      style={{color: 'var(--foreground)'}}
-                    >
-                      <Database className="w-4 h-4" />
-                      <span>数据管理</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigate('/permissions')
-                        setIsUserMenuOpen(false)
-                      }}
-                      className="w-full px-4 py-3 flex items-center gap-2 hover:bg-muted/50 transition-colors duration-200"
-                      style={{color: 'var(--foreground)'}}
-                    >
-                      <Shield className="w-4 h-4" />
-                      <span>浏览器权限</span>
-                    </button>
+                    <div className="border-t border-border"></div>
                     <button
                       onClick={handleLogout}
-                      className="w-full px-4 py-3 flex items-center gap-2 hover:bg-muted/50 transition-colors duration-200"
-                      style={{color: 'var(--foreground)'}}
+                      className="w-full px-4 py-3 flex items-center gap-2 hover:bg-muted/50 transition-colors duration-200 text-error"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>登出</span>

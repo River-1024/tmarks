@@ -40,8 +40,8 @@ export class HtmlParser implements ImportParser {
   }
 
   async validate(data: ImportData): Promise<ValidationResult> {
-    const errors: any[] = []
-    const warnings: any[] = []
+    const errors: Array<{ field: string; message: string; value?: unknown }> = []
+    const warnings: Array<{ field: string; message: string; value?: unknown }> = []
 
     // 验证书签数据
     data.bookmarks.forEach((bookmark, index) => {

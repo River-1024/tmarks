@@ -108,7 +108,7 @@ async function parseImportData(format: ImportFormat, content: string) {
 /**
  * 验证导入数据
  */
-async function validateImportData(format: ImportFormat, data: any) {
+async function validateImportData(format: ImportFormat, data: ImportData) {
   switch (format) {
     case 'html': {
       const htmlParser = createHtmlParser()
@@ -132,7 +132,7 @@ async function validateImportData(format: ImportFormat, data: any) {
 async function performImport(
   db: D1Database, 
   userId: string, 
-  importData: any, 
+  importData: ImportData, 
   options: ImportOptions
 ): Promise<ImportResult> {
   const result: ImportResult = {
@@ -186,7 +186,7 @@ async function createTags(
     'SELECT name FROM tags WHERE user_id = ? AND deleted_at IS NULL'
   ).bind(userId).all()
 
-  const existingTagNames = new Set((existingTags || []).map((tag: any) => tag.name))
+  const existingTagNames = new Set((existingTags || []).map((tag: Record<string, unknown>) => String(tag.name)))
 
   // 创建新标签
   for (const tag of tags) {
@@ -219,7 +219,7 @@ async function getExistingUrls(db: D1Database, userId: string): Promise<Set<stri
     'SELECT url FROM bookmarks WHERE user_id = ? AND deleted_at IS NULL'
   ).bind(userId).all()
 
-  return new Set((bookmarks || []).map((bookmark: any) => bookmark.url))
+  return new Set((bookmarks || []).map((bookmark: Record<string, unknown>) => String(bookmark.url)))
 }
 
 /**
