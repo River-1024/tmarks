@@ -30,7 +30,7 @@ function getDefaultPreferences(): UserPreferences {
     tag_selection_auto_clear_seconds: 30,
     enable_search_auto_clear: true,
     enable_tag_selection_auto_clear: false,
-    default_bookmark_icon: 'bookmark',
+    default_bookmark_icon: 'orbital-spinner',
     snapshot_retention_count: 5,
     snapshot_auto_create: false,
     snapshot_auto_dedupe: true,

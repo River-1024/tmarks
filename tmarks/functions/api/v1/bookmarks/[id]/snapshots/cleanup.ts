@@ -67,7 +67,7 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
             if (!r2Object) {
               orphaned.push(snapshot)
             }
-          } catch (error) {
+          } catch {
             // 文件不存在
             orphaned.push(snapshot)
           }

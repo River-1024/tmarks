@@ -56,7 +56,6 @@ export function TabCollectionView({ config, onBack }: TabCollectionViewProps) {
       // Select all by default
       setSelectedTabIds(new Set(validTabs.map((tab) => tab.id)));
     } catch (err) {
-      console.error('Failed to load tabs:', err);
       setError('加载标签页失败');
     } finally {
       setIsLoading(false);
@@ -102,7 +101,6 @@ export function TabCollectionView({ config, onBack }: TabCollectionViewProps) {
         setError(result.error || '收纳失败');
       }
     } catch (err) {
-      console.error('Failed to collect tabs:', err);
       setError(err instanceof Error ? err.message : '收纳失败');
     } finally {
       setIsCollecting(false);
@@ -114,7 +112,6 @@ export function TabCollectionView({ config, onBack }: TabCollectionViewProps) {
       await closeTabs(collectedTabIds);
       window.close();
     } catch (err) {
-      console.error('Failed to close tabs:', err);
       setError('关闭标签页失败');
     }
   };

@@ -125,13 +125,12 @@ class PageContentExtractor {
         if (largestIcon && largestIcon.href) {
           const url = safeParseUrl(largestIcon.href);
           if (url) {
-            console.log('[ContentScript] Found apple-touch-icon:', url);
             return url;
           }
         }
       }
     } catch (e) {
-      console.error('[ContentScript] Error reading apple-touch-icon:', e);
+      // Silently handle error
     }
 
     // 2. 尝试获取标准的 icon 或 shortcut icon
@@ -177,13 +176,12 @@ class PageContentExtractor {
         if (bestIcon && bestIcon.href) {
           const url = safeParseUrl(bestIcon.href);
           if (url) {
-            console.log('[ContentScript] Found icon:', url);
             return url;
           }
         }
       }
     } catch (e) {
-      console.error('[ContentScript] Error reading icon:', e);
+      // Silently handle error
     }
 
     // 3. 使用Chrome的favicon API（高清版本）
@@ -192,19 +190,17 @@ class PageContentExtractor {
       // Chrome的favicon API支持高清图标，size参数可以是16, 32, 64等
       // @2x表示Retina屏幕的2倍分辨率
       const chromeIconUrl = `chrome://favicon/size/64@2x/${domain}`;
-      console.log('[ContentScript] Using Chrome favicon API:', chromeIconUrl);
       return chromeIconUrl;
     } catch (e) {
-      console.error('[ContentScript] Error using Chrome favicon API:', e);
+      // Silently handle error
     }
 
     // 4. 回退到标准favicon.ico路径
     try {
       const faviconUrl = new URL('/favicon.ico', window.location.origin).href;
-      console.log('[ContentScript] Fallback to favicon.ico:', faviconUrl);
       return faviconUrl;
     } catch (e) {
-      console.error('[ContentScript] Error constructing favicon.ico URL:', e);
+      // Silently handle error
     }
 
     return '';
@@ -245,12 +241,11 @@ class PageContentExtractor {
       if (ogImage instanceof HTMLMetaElement && ogImage.content) {
         const url = safeParseUrl(ogImage.content);
         if (url && !thumbnails.includes(url)) {
-          console.log('[ContentScript] Found og:image:', url);
           thumbnails.push(url);
         }
       }
     } catch (e) {
-      console.error('[ContentScript] Error reading og:image:', e);
+      // Silently handle error
     }
 
     // 2. 尝试获取 Twitter image
@@ -259,12 +254,11 @@ class PageContentExtractor {
       if (twitterImage instanceof HTMLMetaElement && twitterImage.content) {
         const url = safeParseUrl(twitterImage.content);
         if (url && !thumbnails.includes(url)) {
-          console.log('[ContentScript] Found twitter:image:', url);
           thumbnails.push(url);
         }
       }
     } catch (e) {
-      console.error('[ContentScript] Error reading twitter:image:', e);
+      // Silently handle error
     }
 
     // 3. 尝试在页面中查找多个大图片
@@ -317,7 +311,6 @@ class PageContentExtractor {
               }
             }
           } catch (imgError) {
-            console.warn('[ContentScript] Error processing image:', imgError);
             continue;
           }
         }
@@ -329,15 +322,13 @@ class PageContentExtractor {
       
       for (const { url } of topImages) {
         if (!thumbnails.includes(url)) {
-          console.log('[ContentScript] Found large image:', url);
           thumbnails.push(url);
         }
       }
     } catch (e) {
-      console.error('[ContentScript] Error finding large images:', e);
+      // Silently handle error
     }
 
-    console.log('[ContentScript] Total thumbnails found:', thumbnails.length);
     return thumbnails;
   }
 
@@ -360,7 +351,7 @@ const extractor = new PageContentExtractor();
 
 // 防止重复注入
 if ((window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__) {
-  console.log('[ContentScript] Already loaded, skipping initialization');
+  // Already loaded, skip initialization
 } else {
   (window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__ = true;
 
@@ -371,14 +362,12 @@ if ((window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__) {
       _sender: chrome.runtime.MessageSender,
       sendResponse: (response: MessageResponse) => void
     ) => {
-      console.log('[ContentScript] Received message:', message.type);
-
       // 心跳响应 - 用于检测 content script 是否存活（优先处理，最快响应）
       if (message.type === 'PING') {
         try {
           sendResponse({ success: true, data: 'pong' });
         } catch (error) {
-          console.error('[ContentScript] Failed to send PING response:', error);
+          // Silently handle error
         }
         return true;
       }
@@ -388,11 +377,8 @@ if ((window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__) {
         // 使用异步处理，避免阻塞
         (async () => {
           try {
-            console.log('[ContentScript] Starting page info extraction...');
-            
             // 检查文档是否准备就绪
             if (document.readyState === 'loading') {
-              console.log('[ContentScript] Document still loading, waiting...');
               await new Promise(resolve => {
                 if (document.readyState === 'loading') {
                   document.addEventListener('DOMContentLoaded', resolve, { once: true });
@@ -406,29 +392,17 @@ if ((window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__) {
             
             // 验证提取的数据
             if (!pageInfo.url) {
-              console.warn('[ContentScript] Extracted page info missing URL');
               pageInfo.url = window.location.href;
             }
             if (!pageInfo.title) {
-              console.warn('[ContentScript] Extracted page info missing title');
               pageInfo.title = document.title || 'Untitled';
             }
-
-            console.log('[ContentScript] Successfully extracted page info:', {
-              title: pageInfo.title,
-              url: pageInfo.url,
-              hasDescription: !!pageInfo.description,
-              hasThumbnail: !!pageInfo.thumbnail,
-              contentLength: pageInfo.content?.length || 0
-            });
 
             sendResponse({
               success: true,
               data: pageInfo
             });
           } catch (error) {
-            console.error('[ContentScript] Failed to extract page info:', error);
-            
             // 即使失败也返回基本信息
             sendResponse({
               success: true,
@@ -450,15 +424,12 @@ if ((window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__) {
       if (message.type === 'CAPTURE_PAGE') {
         (async () => {
           try {
-            console.log('[ContentScript] Starting SingleFile capture...');
             const { capturePage } = await import('./singlefile-capture');
             const html = await capturePage(message.options || {});
             const size = new Blob([html]).size;
             
-            console.log(`[ContentScript] Capture successful: ${(size / 1024).toFixed(1)}KB`);
             sendResponse({ success: true, html, size });
           } catch (error) {
-            console.error('[ContentScript] Capture failed:', error);
             sendResponse({
               success: false,
               error: error instanceof Error ? error.message : 'Unknown error'
@@ -473,7 +444,6 @@ if ((window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__) {
       if (message.type === 'CAPTURE_PAGE_V2') {
         (async () => {
           try {
-            console.log('[ContentScript] Starting SingleFile V2 capture...');
             const { capturePageV2 } = await import('./singlefile-capture-v2');
             const result = await capturePageV2(message.options || {});
             
@@ -496,7 +466,6 @@ if ((window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__) {
               })
             );
             
-            console.log(`[ContentScript] V2 Capture successful: HTML ${(result.html.length / 1024).toFixed(1)}KB, ${images.length} images`);
             sendResponse({ 
               success: true, 
               data: {
@@ -505,7 +474,6 @@ if ((window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__) {
               }
             });
           } catch (error) {
-            console.error('[ContentScript] V2 Capture failed:', error);
             sendResponse({
               success: false,
               error: error instanceof Error ? error.message : 'Unknown error'
@@ -517,10 +485,7 @@ if ((window as any).__AITMARKS_CONTENT_SCRIPT_LOADED__) {
       }
 
       // 未知消息类型
-      console.warn('[ContentScript] Unknown message type:', message.type);
       return false;
     }
   );
-
-  console.log('[AITmarks] Content script loaded successfully');
 }

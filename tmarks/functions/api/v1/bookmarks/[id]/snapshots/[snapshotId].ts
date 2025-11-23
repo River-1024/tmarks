@@ -9,11 +9,6 @@ import type { Env } from '../../../../../lib/types'
 import { notFound, internalError } from '../../../../../lib/response'
 import { requireAuth, AuthContext } from '../../../../../middleware/auth'
 
-interface RouteParams {
-  id: string
-  snapshotId: string
-}
-
 // GET /api/v1/bookmarks/:id/snapshots/:snapshotId - 获取快照
 export const onRequestGet: PagesFunction<Env, 'id' | 'snapshotId', AuthContext>[] = [
   requireAuth,
@@ -73,14 +68,13 @@ export const onRequestGet: PagesFunction<Env, 'id' | 'snapshotId', AuthContext>[
       const isV2 = htmlContent.includes('/api/snapshot-images/')
       
       if (isV2) {
-        const version = (snapshot as any).version || 1
-        const baseUrl = new URL(context.request.url).origin
+        const version = (snapshot as Record<string, unknown>).version as number || 1
         
         // 处理图片 URL：规范化所有图片 URL，确保参数正确
         let replacedCount = 0
         htmlContent = htmlContent.replace(
           /\/api\/snapshot-images\/([a-zA-Z0-9._-]+?)(?:\?[^"\s)]*)?(?=["\s)]|$)/g,
-          (match, hash) => {
+          (_match: string, hash: string) => {
             replacedCount++
             // 只替换路径部分，不包含域名（避免重复）
             return `/api/snapshot-images/${hash}?u=${userId}&b=${bookmarkId}&v=${version}`;
@@ -135,7 +129,7 @@ export const onRequestDelete: PagesFunction<Env, 'id' | 'snapshotId', AuthContex
         return notFound('Snapshot not found')
       }
 
-      const version = (snapshot as any).version || 1
+      const version = (snapshot as Record<string, unknown>).version as number || 1
 
       // 删除 R2 HTML 文件
       await bucket.delete(snapshot.r2_key as string)

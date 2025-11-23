@@ -22,7 +22,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
 
     // 提取签名参数
-    const { signature, expires, userId, action } = extractSignedParams(context.request)
+    const { signature, expires, userId, action } = extractSignedParams(context.request as unknown as Request)
 
     if (!signature || !expires || !userId) {
       return unauthorized('Missing signature parameters')
@@ -84,14 +84,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const isV2 = htmlContent.includes('/api/snapshot-images/')
     
     if (isV2) {
-      const version = (snapshot as any).version || 1
-      const baseUrl = new URL(context.request.url).origin
+      const version = (snapshot as Record<string, unknown>).version as number || 1
       
       // 处理图片 URL：规范化所有图片 URL，确保参数正确
       let replacedCount = 0
       htmlContent = htmlContent.replace(
         /\/api\/snapshot-images\/([a-zA-Z0-9._-]+?)(?:\?[^"\s)]*)?(?=["\s)]|$)/g,
-        (match, hash) => {
+        (_match: string, hash: string) => {
           replacedCount++
           // 只替换路径部分，不包含域名（避免重复）
           return `/api/snapshot-images/${hash}?u=${userId}&b=${bookmarkId}&v=${version}`;

@@ -49,13 +49,10 @@ export class BookmarkService {
           title: bookmark.title,
           tags: bookmark.tags
         });
-      } else {
-        console.log('[BookmarkService] Bookmark already exists, skipping cache update');
       }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[BookmarkService] Failed to save bookmark:', errorMessage);
 
       // Check if it's a network error
       if (errorMessage.includes('Network')) {
@@ -76,8 +73,6 @@ export class BookmarkService {
     // 5. Create snapshot if requested (works for both new and existing bookmarks)
     if (bookmark.createSnapshot && bookmarkId) {
       try {
-        console.log('[BookmarkService] Creating snapshot (V2)...');
-        
         // Get the current tab
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab && tab.id) {
@@ -105,12 +100,10 @@ export class BookmarkService {
             
             if (response.success) {
               captureResult = response.data;
-              console.log(`[BookmarkService] Captured (V2): HTML ${(captureResult.html.length / 1024).toFixed(1)}KB, ${captureResult.images.length} images`);
             } else {
               throw new Error(response.error || 'Capture failed');
             }
           } catch (error) {
-            console.error('[BookmarkService] V2 capture failed:', error);
             throw error;
           }
           
@@ -128,11 +121,8 @@ export class BookmarkService {
             url: bookmark.url,
             images,
           });
-          
-          console.log('[BookmarkService] Snapshot V2 created successfully, images:', images.length)
         }
       } catch (snapshotError) {
-        console.error('[BookmarkService] Failed to create snapshot:', snapshotError);
         // Don't fail the whole operation if snapshot creation fails
       }
     }
@@ -176,8 +166,6 @@ export class BookmarkService {
       value: bookmark,
       updatedAt: Date.now()
     });
-
-    console.log('[BookmarkService] Bookmark queued for later sync');
   }
 
   /**
@@ -199,14 +187,12 @@ export class BookmarkService {
           await bookmarkAPI.addBookmark(bookmark);
           await db.metadata.delete(item.key);
           synced++;
-          console.log('[BookmarkService] Synced pending bookmark:', bookmark.title);
         }
       } catch (error) {
-        console.error('[BookmarkService] Failed to sync pending bookmark:', error);
+        // Silently handle error
       }
     }
 
-    console.log(`[BookmarkService] Synced ${synced}/${pending.length} pending bookmarks`);
     return synced;
   }
 

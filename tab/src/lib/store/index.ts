@@ -157,8 +157,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     StorageService.saveConfig({
       preferences: preferencesPayload
-    }).catch((error) => {
-      console.error('Failed to persist visibility preference:', error);
+    }).catch(() => {
+      // Silently handle error
     });
   },
   setIncludeThumbnail: (value) => set({ includeThumbnail: value }),
@@ -202,7 +202,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       set({ existingTags: tags });
     } catch (error) {
-      console.error('Failed to load existing tags:', error);
       // Don't set error state as this is not critical
     }
   },
@@ -216,7 +215,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         isPublic: config.preferences.defaultVisibility === 'public'
       });
     } catch (error) {
-      console.error('Failed to load config:', error);
       set({ error: 'Failed to load configuration' });
     }
   },
@@ -230,7 +228,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         isPublic: config.preferences.defaultVisibility === 'public'
       });
     } catch (error) {
-      console.error('Failed to save config:', error);
       set({ error: 'Failed to save configuration' });
     }
   },
@@ -253,7 +250,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         includeThumbnail: Boolean(response.thumbnail)
       });
     } catch (error) {
-      console.error('Failed to extract page info:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to extract page info',
         isLoading: false
@@ -324,7 +320,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         }, 2000);
       }
     } catch (error) {
-      console.error('Failed to recommend tags:', error);
       const elapsedMs = Date.now() - startTime;
       set({
         error: error instanceof Error ? error.message : 'Failed to recommend tags',
@@ -356,8 +351,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       set({ isLoading: true, isSaving: true, error: null });
 
-      console.log('[Store] 保存书签，选中的标签:', selectedTags);
-
       const result = await sendMessage<SaveResult>({
         type: 'SAVE_BOOKMARK',
         payload: {
@@ -374,7 +367,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       const endTime = Date.now();
       const elapsedMs = endTime - startTime;
       const formattedSeconds = (elapsedMs / 1000).toFixed(2);
-      console.log(`[Store] 书签保存耗时: ${formattedSeconds}s (${elapsedMs.toFixed(0)}ms)`);
 
       // Check if save was successful
       if (!result.success) {
@@ -445,7 +437,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       const failureTime = Date.now();
       const elapsedMs = failureTime - startTime;
       const formattedSeconds = (elapsedMs / 1000).toFixed(2);
-      console.error('Failed to save bookmark:', error);
       set({
         error:
           `${error instanceof Error ? error.message : 'Failed to save bookmark'}（耗时 ${formattedSeconds}s）`,
@@ -459,8 +450,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateExistingBookmarkTags: async (bookmarkId: string, tags: string[]) => {
     try {
       set({ isSaving: true, error: null });
-
-      console.log('[Store] 更新书签标签:', bookmarkId, tags);
 
       // 发送更新请求到 background
       const result = await sendMessage({
@@ -492,7 +481,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ successMessage: null });
       }, 2000);
     } catch (error) {
-      console.error('Failed to update tags:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to update tags',
         isSaving: false
@@ -540,7 +528,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         }, 3000); // 增加到3秒，让用户有时间看到成功消息
       }
     } catch (error) {
-      console.error('Failed to create snapshot:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to create snapshot',
         loadingMessage: null,
@@ -566,7 +553,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ successMessage: null });
       }, 2000);
     } catch (error) {
-      console.error('Failed to sync cache:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to sync cache',
         isLoading: false

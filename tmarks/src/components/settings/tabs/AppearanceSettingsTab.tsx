@@ -5,16 +5,12 @@ import type { DefaultBookmarkIcon } from '@/lib/types'
 
 interface AppearanceSettingsTabProps {
   defaultIcon: DefaultBookmarkIcon
-  tagLayout: 'grid' | 'masonry'
   onIconChange: (icon: DefaultBookmarkIcon) => void
-  onTagLayoutChange: (layout: 'grid' | 'masonry') => void
 }
 
 export function AppearanceSettingsTab({
   defaultIcon,
-  tagLayout,
   onIconChange,
-  onTagLayoutChange,
 }: AppearanceSettingsTabProps) {
   return (
     <div className="space-y-6">
@@ -23,12 +19,10 @@ export function AppearanceSettingsTab({
         onIconChange={onIconChange}
       />
 
-
       {/* 提示信息 */}
       <InfoBox icon={Palette} title="外观定制说明" variant="info">
         <ul className="space-y-1">
           <li>• 默认图标会在书签没有封面图和网站图标时显示</li>
-          <li>• 标签布局影响侧边栏标签的排列方式</li>
           <li>• 所有外观设置会实时生效</li>
         </ul>
       </InfoBox>

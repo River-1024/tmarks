@@ -9,22 +9,17 @@ import type { Message, MessageResponse } from '@/types';
  * Background service worker for Chrome Extension
  */
 
-console.log('[Background] Service worker started');
-
-tagRecommender.preloadContext().catch(error => {
-  console.error('[Background] Failed to preload AI context:', error);
+// Preload AI context
+tagRecommender.preloadContext().catch(() => {
+  // Silently fail - AI features will work on-demand
 });
 
 // Initialize on install
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('[Background] Extension installed:', details.reason);
-
   if (details.reason === 'install') {
     // First time install - maybe show welcome page
-    console.log('[Background] First time install');
   } else if (details.reason === 'update') {
     // Extension updated
-    console.log('[Background] Extension updated');
   }
 });
 
@@ -48,21 +43,15 @@ async function runAutoSync() {
       return;
     }
 
-    console.log('[Background] Running scheduled auto-sync (23:00)...');
-    const result = await cacheManager.autoSync(config.preferences.syncInterval);
-
-    if (result) {
-      console.log('[Background] Auto-sync result:', result);
-    }
+    await cacheManager.autoSync(config.preferences.syncInterval);
   } catch (error) {
-    console.error('[Background] Auto-sync failed:', error);
+    // Silently fail - will retry on next schedule
   }
 }
 
 async function startAutoSync() {
   const scheduleNext = () => {
     const delay = getMsUntilNextDailySync();
-    console.log('[Background] Next auto-sync scheduled in', Math.round(delay / 1000), 'seconds');
 
     setTimeout(async () => {
       await runAutoSync();
@@ -74,10 +63,10 @@ async function startAutoSync() {
 }
 
 // Start auto-sync
-startAutoSync().catch(console.error);
+startAutoSync().catch(() => {});
 
 // Sync pending bookmarks on startup
-bookmarkService.syncPendingBookmarks().catch(console.error);
+bookmarkService.syncPendingBookmarks().catch(() => {});
 
 // Handle messages from popup/content scripts
 chrome.runtime.onMessage.addListener(
@@ -90,7 +79,6 @@ chrome.runtime.onMessage.addListener(
     handleMessage(message, sender)
       .then(response => sendResponse(response))
       .catch(error => {
-        console.error('[Background] Message handler error:', error);
         sendResponse({
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -109,8 +97,6 @@ async function handleMessage(
   message: Message,
   _sender: chrome.runtime.MessageSender
 ): Promise<MessageResponse> {
-  console.log('[Background] Received message:', message.type);
-
   switch (message.type) {
     case 'EXTRACT_PAGE_INFO': {
       // 获取当前活动标签页
@@ -127,7 +113,6 @@ async function handleMessage(
           url.startsWith('edge://') ||
           url.startsWith('about:') ||
           !url) {
-        console.warn('[Background] Cannot access special page:', url);
         return {
           success: true,
           data: {
@@ -165,7 +150,6 @@ async function handleMessage(
             }
           };
         } catch (error) {
-          console.error('[Background] Failed to get tab info:', error);
           return {
             success: true,
             data: {
@@ -184,27 +168,22 @@ async function handleMessage(
       try {
         await sendMessageWithTimeout(tab.id, { type: 'PING' }, 1000);
         isContentScriptAlive = true;
-        console.log('[Background] Content script is alive');
       } catch (pingError) {
-        console.warn('[Background] Content script not responding:', pingError);
+        // Content script not responding, will try to inject
       }
 
       // 步骤2: 如果content script不存在，尝试注入
       if (!isContentScriptAlive) {
         try {
-          console.log('[Background] Attempting to inject content script...');
-          
           // 获取manifest中的content script配置
           const manifest = chrome.runtime.getManifest();
           const contentScripts = manifest.content_scripts?.[0];
           
           if (!contentScripts || !contentScripts.js || contentScripts.js.length === 0) {
-            console.error('[Background] Content script configuration not found in manifest');
             return await getBasicPageInfo(tab.id);
           }
 
           const scriptPath = contentScripts.js[0];
-          console.log('[Background] Injecting content script from:', scriptPath);
           
           // 注入content script
           await chrome.scripting.executeScript({
@@ -219,20 +198,10 @@ async function handleMessage(
           try {
             await sendMessageWithTimeout(tab.id, { type: 'PING' }, 1000);
             isContentScriptAlive = true;
-            console.log('[Background] Content script injected successfully');
           } catch (verifyError) {
-            console.error('[Background] Content script injection verification failed:', verifyError);
             return await getBasicPageInfo(tab.id);
           }
         } catch (injectError) {
-          const errorMessage = injectError instanceof Error ? injectError.message : 'Unknown error';
-          console.error('[Background] Failed to inject content script:', errorMessage);
-          
-          // 检查是否是权限问题
-          if (errorMessage.includes('Cannot access')) {
-            console.warn('[Background] No permission to inject script on this page');
-          }
-          
           return await getBasicPageInfo(tab.id);
         }
       }
@@ -240,25 +209,20 @@ async function handleMessage(
       // 步骤3: 发送实际的提取请求
       if (isContentScriptAlive) {
         try {
-          console.log('[Background] Sending EXTRACT_PAGE_INFO request...');
           const response = await sendMessageWithTimeout(tab.id, message, 5000);
           
           // 验证响应数据的完整性
           if (response.success && response.data) {
-            console.log('[Background] Successfully extracted page info');
             return response;
           } else {
-            console.warn('[Background] Invalid response from content script:', response);
             return await getBasicPageInfo(tab.id);
           }
         } catch (extractError) {
-          console.error('[Background] Failed to extract page info:', extractError);
           return await getBasicPageInfo(tab.id);
         }
       }
 
       // 步骤4: 最终fallback
-      console.warn('[Background] All extraction attempts failed, returning basic info');
       return await getBasicPageInfo(tab.id);
     }
 
@@ -282,7 +246,6 @@ async function handleMessage(
           data: result
         };
       } catch (error) {
-        console.error('[Background] Failed to save bookmark:', error);
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to save bookmark'
@@ -308,7 +271,6 @@ async function handleMessage(
           data: tags
         };
       } catch (error) {
-        console.error('[Background] Failed to get existing tags:', error);
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to load tags'
@@ -320,8 +282,6 @@ async function handleMessage(
       try {
         const { bookmarkId, tags } = message.payload;
         
-        console.log('[Background] Updating bookmark tags:', bookmarkId, tags);
-        
         // 调用 API 更新标签
         await bookmarkAPI.updateBookmarkTags(bookmarkId, tags);
 
@@ -330,7 +290,6 @@ async function handleMessage(
           data: { message: 'Tags updated successfully' }
         };
       } catch (error) {
-        console.error('[Background] Failed to update tags:', error);
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to update tags'
@@ -347,8 +306,6 @@ async function handleMessage(
         if (!tab || !tab.id) {
           throw new Error('No active tab found');
         }
-
-        console.log('[Background] Starting snapshot capture (V2)...');
 
         // Capture page using V2 method (separate images)
         let captureResult: { html: string; images: any[] };
@@ -374,12 +331,10 @@ async function handleMessage(
           
           if (response.success) {
             captureResult = response.data;
-            console.log(`[Background] Captured (V2): HTML ${(captureResult.html.length / 1024).toFixed(1)}KB, ${captureResult.images.length} images`);
           } else {
             throw new Error(response.error || 'Capture failed');
           }
         } catch (error) {
-          console.error('[Background] V2 capture failed:', error);
           throw error;
         }
         
@@ -406,7 +361,6 @@ async function handleMessage(
           }
         };
       } catch (error) {
-        console.error('[Background] Failed to create snapshot:', error);
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to create snapshot'
@@ -429,9 +383,6 @@ async function handleMessage(
 }
 
 // Handle extension icon click (optional)
-chrome.action.onClicked.addListener(async (tab) => {
-  console.log('[Background] Extension icon clicked for tab:', tab.id);
+chrome.action.onClicked.addListener(async () => {
   // The popup will open automatically due to manifest.json configuration
 });
-
-console.log('[Background] Service worker initialized');

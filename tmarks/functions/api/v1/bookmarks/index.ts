@@ -11,6 +11,7 @@ import { CacheService } from '../../../lib/cache'
 import { createBookmarkCacheManager } from '../../../lib/cache/bookmark-cache'
 import type { QueryParams } from '../../../lib/cache/types'
 import { createOrLinkTags } from '../../../lib/tags'
+import { uploadCoverImageToR2 } from '../../../lib/image-upload'
 
 interface CreateBookmarkRequest {
   title: string
@@ -277,7 +278,7 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
       const title = sanitizeString(body.title, 500)
       const url = sanitizeString(body.url, 2000)
       const description = body.description ? sanitizeString(body.description, 1000) : null
-      const coverImage = body.cover_image ? sanitizeString(body.cover_image, 2000) : null
+      let coverImage = body.cover_image ? sanitizeString(body.cover_image, 2000) : null
       const favicon = body.favicon ? sanitizeString(body.favicon, 2000) : null
 
       // 检查URL是否已存在（包括已删除的）
@@ -292,6 +293,28 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
       const isPinned = body.is_pinned ? 1 : 0
       const isArchived = body.is_archived ? 1 : 0
       const isPublic = body.is_public ? 1 : 0
+
+      // 如果有封面图且配置了 R2 bucket，上传到 R2
+      let coverImageId: string | null = null
+      if (coverImage && context.env.SNAPSHOTS_BUCKET) {
+        // 生成临时 ID（如果是新书签）
+        const tempBookmarkId = existing?.id || generateUUID()
+        
+        const uploadResult = await uploadCoverImageToR2(
+          coverImage,
+          userId,
+          tempBookmarkId,
+          context.env.SNAPSHOTS_BUCKET,
+          context.env.DB
+        )
+
+        // 如果上传成功，使用 R2 URL 和 imageId
+        if (uploadResult.success && uploadResult.r2Url) {
+          coverImage = uploadResult.r2Url
+          coverImageId = uploadResult.imageId || null
+        }
+        // 如果上传失败，继续使用原始 URL（降级方案）
+      }
 
       if (existing) {
         bookmarkId = existing.id
@@ -335,7 +358,7 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
         // 如果是已删除的书签，恢复并更新
         await context.env.DB.prepare(
           `UPDATE bookmarks
-           SET title = ?, description = ?, cover_image = ?, favicon = ?,
+           SET title = ?, description = ?, cover_image = ?, cover_image_id = ?, favicon = ?,
                is_pinned = ?, is_archived = ?, is_public = ?,
                deleted_at = NULL, updated_at = ?
            WHERE id = ?`
@@ -344,6 +367,7 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
             title,
             description,
             coverImage,
+            coverImageId,
             favicon,
             isPinned,
             isArchived,
@@ -363,8 +387,8 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
         bookmarkId = bookmarkUuid
 
         await context.env.DB.prepare(
-          `INSERT INTO bookmarks (id, user_id, title, url, description, cover_image, favicon, is_pinned, is_archived, is_public, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO bookmarks (id, user_id, title, url, description, cover_image, cover_image_id, favicon, is_pinned, is_archived, is_public, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
           .bind(
             bookmarkUuid,
@@ -373,6 +397,7 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
             url,
             description,
             coverImage,
+            coverImageId,
             favicon,
             isPinned,
             isArchived,

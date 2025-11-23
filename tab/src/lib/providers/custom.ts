@@ -32,7 +32,6 @@ export class CustomProvider extends AIProvider {
 
       return this.parseResponse(content);
     } catch (error) {
-      console.error('[CustomProvider] 错误详情:', error);
       throw this.handleError(error, 'Custom');
     }
   }

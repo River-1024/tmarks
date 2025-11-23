@@ -50,66 +50,46 @@ async function simpleHash(blob: Blob): Promise<string> {
  */
 export async function capturePageV2(options: Partial<CaptureOptions> = {}): Promise<CaptureResult> {
   const finalOptions = { ...DEFAULT_OPTIONS, ...options }
-  const startTime = Date.now()
   
   try {
-    console.log('[SingleFile V2] Starting capture with options:', finalOptions)
-    
     // 克隆文档
     const doc = document.cloneNode(true) as Document
-    console.log('[SingleFile V2] Document cloned')
     
     const images: ImageData[] = []
     
     // 1. 内联 CSS
     if (finalOptions.inlineCSS) {
-      console.log('[SingleFile V2] Inlining CSS...')
       await inlineStylesheets(doc, finalOptions.timeout!)
     }
     
     // 2. 提取图片（不内联）
     if (finalOptions.extractImages) {
-      console.log('[SingleFile V2] Extracting images...')
       const extractedImages = await extractImages(doc, finalOptions.maxImageSize!, finalOptions.timeout!)
       images.push(...extractedImages)
     }
     
     // 3. 内联字体（可选）
     if (finalOptions.inlineFonts) {
-      console.log('[SingleFile V2] Inlining fonts...')
       await inlineFonts(doc, finalOptions.timeout!)
     }
     
     // 4. 移除脚本
     if (finalOptions.removeScripts) {
-      console.log('[SingleFile V2] Removing scripts...')
       removeScripts(doc)
     }
     
     // 5. 移除隐藏元素（可选）
     if (finalOptions.removeHiddenElements) {
-      console.log('[SingleFile V2] Removing hidden elements...')
       removeHiddenElements(doc)
     }
     
     // 6. 添加元数据
-    console.log('[SingleFile V2] Adding metadata...')
     addMetadata(doc)
     
     const html = doc.documentElement.outerHTML
-    const htmlSize = new Blob([html]).size
-    const duration = Date.now() - startTime
-    
-    console.log(`[SingleFile V2] Capture completed in ${duration}ms`)
-    console.log(`[SingleFile V2] HTML size: ${(htmlSize / 1024).toFixed(1)}KB`)
-    console.log(`[SingleFile V2] Images extracted: ${images.length}`)
-    
-    const totalImageSize = images.reduce((sum, img) => sum + img.blob.size, 0)
-    console.log(`[SingleFile V2] Total image size: ${(totalImageSize / 1024).toFixed(1)}KB`)
     
     return { html, images }
   } catch (error) {
-    console.error('[SingleFile V2] Capture error:', error)
     throw error
   }
 }
@@ -142,29 +122,23 @@ async function extractImages(
       
       const blob = await response.blob()
       const hash = await simpleHash(blob)
-      // 不再添加扩展名，保持 hash 干净
-      // const ext = getExtension(blob.type, url)
-      // const fullHash = `${hash}.${ext}`
       
       images.push({
         originalUrl: url,
         blob,
-        hash: hash, // 使用纯 hash，不带扩展名
-        element: null as any, // 不再需要存储元素引用
+        hash: hash,
+        element: null as any,
       })
       
       imageMap.set(url, hash)
-      console.log(`[SingleFile V2] Extracted: ${url.substring(0, 80)} -> ${hash}`)
       return hash
     } catch (error) {
-      console.warn(`[SingleFile V2] Failed to fetch: ${url}`, error)
       return null
     }
   }
   
   // 1. 处理 <img src>
   const imgElements = Array.from(doc.querySelectorAll('img[src]'))
-  console.log(`[SingleFile V2] Found ${imgElements.length} <img src> elements`)
   
   for (const img of imgElements) {
     if (Date.now() - startTime > timeout) break
@@ -179,7 +153,6 @@ async function extractImages(
   
   // 2. 处理 <img srcset>
   const imgWithSrcset = Array.from(doc.querySelectorAll('img[srcset]'))
-  console.log(`[SingleFile V2] Found ${imgWithSrcset.length} <img srcset> elements`)
   
   for (const img of imgWithSrcset) {
     if (Date.now() - startTime > timeout) break
@@ -208,7 +181,6 @@ async function extractImages(
   
   // 3. 处理 <picture> <source>
   const sourceElements = Array.from(doc.querySelectorAll('picture source[srcset]'))
-  console.log(`[SingleFile V2] Found ${sourceElements.length} <picture source> elements`)
   
   for (const source of sourceElements) {
     if (Date.now() - startTime > timeout) break
@@ -236,7 +208,6 @@ async function extractImages(
   
   // 4. 处理 <video poster>
   const videoElements = Array.from(doc.querySelectorAll('video[poster]'))
-  console.log(`[SingleFile V2] Found ${videoElements.length} <video poster> elements`)
   
   for (const video of videoElements) {
     if (Date.now() - startTime > timeout) break
@@ -250,7 +221,6 @@ async function extractImages(
   
   // 5. 处理 CSS background-image
   const elementsWithStyle = Array.from(doc.querySelectorAll('[style*="background"]'))
-  console.log(`[SingleFile V2] Found ${elementsWithStyle.length} elements with background styles`)
   
   for (const element of elementsWithStyle) {
     if (Date.now() - startTime > timeout) break
@@ -282,7 +252,6 @@ async function extractImages(
     }
   }
   
-  console.log(`[SingleFile V2] Total images extracted: ${images.length}`)
   return images
 }
 
@@ -297,7 +266,6 @@ async function inlineStylesheets(doc: Document, timeout: number): Promise<void> 
   
   for (const link of links) {
     if (Date.now() - startTime > timeout) {
-      console.warn('[SingleFile V2] Stylesheet inlining timeout')
       break
     }
     
@@ -316,7 +284,7 @@ async function inlineStylesheets(doc: Document, timeout: number): Promise<void> 
       style.textContent = processedCSS
       link.replaceWith(style)
     } catch (error) {
-      console.warn(`[SingleFile V2] Failed to inline stylesheet`, error)
+      // Silently handle error
     }
   }
 }
@@ -349,7 +317,6 @@ async function processCSSUrls(css: string, baseUrl: string): Promise<string> {
  */
 async function inlineFonts(_doc: Document, _timeout: number): Promise<void> {
   // 简化实现，暂时跳过
-  console.log('[SingleFile V2] Font inlining skipped')
 }
 
 /**

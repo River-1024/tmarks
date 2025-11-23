@@ -89,7 +89,6 @@ export function Popup() {
 
         setInitialized(true);
       } catch (err) {
-        console.error('Initialization error:', err);
         setError(err instanceof Error ? err.message : 'Failed to initialize');
         setInitialized(true);
       }

@@ -34,8 +34,6 @@ export async function capturePageSnapshot(
   const finalOptions = { ...DEFAULT_SNAPSHOT_OPTIONS, ...options }
   
   try {
-    console.log('[SnapshotService] Starting capture with SingleFile...')
-    
     // 发送消息到 content script 进行捕获
     const response = await chrome.tabs.sendMessage(tabId, {
       type: 'CAPTURE_PAGE',
@@ -43,17 +41,12 @@ export async function capturePageSnapshot(
     })
 
     if (response.success) {
-      const sizeKB = (response.size / 1024).toFixed(1)
-      console.log(`[SnapshotService] Capture successful: ${sizeKB}KB`)
       return response.html
     } else {
       throw new Error(response.error || 'Capture failed')
     }
   } catch (error) {
-    console.error('[SnapshotService] SingleFile capture failed:', error)
-    
     // 降级到简单方案
-    console.log('[SnapshotService] Falling back to simple capture')
     return capturePageSimple(tabId)
   }
 }
@@ -69,13 +62,11 @@ async function capturePageSimple(tabId: number): Promise<string> {
     })
 
     if (results && results[0] && results[0].result) {
-      console.log('[SnapshotService] Simple capture successful')
       return results[0].result as string
     }
 
     throw new Error('Failed to capture page content')
   } catch (error) {
-    console.error('[SnapshotService] Simple capture failed:', error)
     throw error
   }
 }

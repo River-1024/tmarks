@@ -20,36 +20,32 @@ export function DefaultBookmarkIconSettings({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {DEFAULT_ICON_OPTIONS.map((option) => (
           <button
             key={option.value}
             onClick={() => onIconChange(option.value)}
-            className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+            className={`flex flex-col items-center gap-4 p-6 rounded-2xl border-2 transition-all hover:scale-[1.02] ${
               selectedIcon === option.value
-                ? 'border-primary bg-primary/5 shadow-md'
-                : 'border-border hover:border-primary/50'
+                ? 'border-primary bg-primary/5 shadow-lg ring-2 ring-primary/20'
+                : 'border-border hover:border-primary/50 hover:shadow-md'
             }`}
           >
-            <div className="w-12 h-12 flex items-center justify-center">
+            <div className="w-20 h-20 flex items-center justify-center">
               <DefaultBookmarkIconComponent 
                 icon={option.value} 
-                className={`w-10 h-10 ${
-                  selectedIcon === option.value 
-                    ? 'text-primary' 
-                    : 'text-muted-foreground'
-                }`}
+                className="w-16 h-16"
               />
             </div>
             <div className="text-center">
-              <div className={`text-sm font-medium ${
+              <div className={`text-base font-semibold mb-1 ${
                 selectedIcon === option.value 
                   ? 'text-primary' 
                   : 'text-foreground'
               }`}>
                 {option.label}
               </div>
-              <div className="text-xs text-muted-foreground mt-0.5">
+              <div className="text-sm text-muted-foreground">
                 {option.description}
               </div>
             </div>

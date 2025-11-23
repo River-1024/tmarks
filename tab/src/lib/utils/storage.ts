@@ -138,7 +138,6 @@ export class StorageService {
       this.configCache = config;
       return config;
     } catch (error) {
-      console.error('Failed to load config:', error);
       const fallback = cloneDefaultConfig();
       this.configCache = fallback;
       return fallback;
@@ -187,7 +186,6 @@ export class StorageService {
       await chrome.storage.local.set({ [this.STORAGE_KEY]: newConfig });
       this.configCache = this.mergeWithDefaults(newConfig);
     } catch (error) {
-      console.error('Failed to save config:', error);
       throw error;
     }
   }

@@ -1,5 +1,6 @@
-import { Shield, Download, Info, Chrome, ExternalLink } from 'lucide-react'
+import { Shield, Download, Info, ExternalLink } from 'lucide-react'
 import { InfoBox } from '../InfoBox'
+import * as simpleIcons from 'simple-icons'
 
 export function BrowserSettingsTab() {
 
@@ -14,75 +15,80 @@ export function BrowserSettingsTab() {
     document.body.removeChild(link)
   }
 
-  // 浏览器图标组件
+  // 浏览器图标组件 - 使用官方 SVG 图标
   const BrowserIcon = ({ browser, className }: { browser: string; className?: string }) => {
     const baseClass = className || 'w-8 h-8'
     
-    switch (browser) {
-      case 'chrome':
-        return (
-          <svg className={baseClass} viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" className="fill-primary"/>
-            <circle cx="12" cy="12" r="6" className="fill-background"/>
-            <circle cx="12" cy="12" r="4" className="fill-primary"/>
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="none" className="stroke-primary" strokeWidth="0.5"/>
-          </svg>
-        )
-      case 'edge':
-        return (
-          <svg className={baseClass} viewBox="0 0 24 24" fill="none">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" className="fill-primary"/>
-            <path d="M12 6c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6" className="fill-primary/70"/>
-          </svg>
-        )
-      case 'firefox':
-        return (
-          <svg className={baseClass} viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" className="fill-primary"/>
-            <path d="M12 4c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8" className="fill-primary/80"/>
-            <circle cx="12" cy="12" r="4" className="fill-primary/60"/>
-          </svg>
-        )
-      case 'brave':
-        return (
-          <svg className={baseClass} viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" className="fill-primary"/>
-            <path d="M12 6l-4 3v3c0 2.76 1.92 5.37 4 6 2.08-.63 4-3.24 4-6V9l-4-3z" className="fill-background"/>
-          </svg>
-        )
-      case 'opera':
-        return (
-          <svg className={baseClass} viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" className="fill-primary"/>
-            <ellipse cx="12" cy="12" rx="4" ry="7" className="fill-background"/>
-          </svg>
-        )
-      case '360':
-        return (
-          <svg className={baseClass} viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" className="fill-primary"/>
-            <path d="M12 4v16M4 12h16" className="stroke-background" strokeWidth="2"/>
-          </svg>
-        )
-      case 'qq':
-        return (
-          <svg className={baseClass} viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" className="fill-primary"/>
-            <circle cx="9" cy="10" r="1.5" className="fill-background"/>
-            <circle cx="15" cy="10" r="1.5" className="fill-background"/>
-            <path d="M8 14c0 2 1.79 3.5 4 3.5s4-1.5 4-3.5" className="stroke-background" strokeWidth="1.5" fill="none"/>
-          </svg>
-        )
-      case 'sogou':
-        return (
-          <svg className={baseClass} viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" className="fill-primary"/>
-            <text x="12" y="16" textAnchor="middle" className="fill-background" fontSize="10" fontWeight="bold">搜</text>
-          </svg>
-        )
-      default:
-        return <Chrome className={baseClass} />
+    // 获取对应的 Simple Icons 图标
+    const getIconData = () => {
+      switch (browser) {
+        case 'chrome':
+          return simpleIcons.siGooglechrome
+        case 'firefox':
+          return simpleIcons.siFirefox
+        case 'edge':
+          // Edge 使用通用浏览器图标
+          return null
+        case 'brave':
+          return simpleIcons.siBrave
+        case 'opera':
+          return simpleIcons.siOpera
+        case '360':
+          // 360 浏览器没有官方图标
+          return null
+        case 'qq':
+          return simpleIcons.siQq
+        case 'sogou':
+          // 搜狗没有官方图标
+          return null
+        default:
+          return simpleIcons.siGooglechrome
+      }
     }
+
+    const iconData = getIconData()
+    
+    // 如果没有官方图标，使用自定义图标
+    if (!iconData) {
+      // Edge 浏览器图标
+      if (browser === 'edge') {
+        return (
+          <svg className={baseClass} viewBox="0 0 24 24" fill="currentColor" style={{ color: '#0078D4' }}>
+            <path d="M20.5 12c0-4.7-3.8-8.5-8.5-8.5S3.5 7.3 3.5 12c0 4.1 2.9 7.5 6.8 8.3.5.1 1 .2 1.5.2 4.7 0 8.5-3.8 8.5-8.5h.2zm-8.5 7c-3.9 0-7-3.1-7-7s3.1-7 7-7 7 3.1 7 7-3.1 7-7 7z"/>
+            <path d="M12 7c-2.8 0-5 2.2-5 5s2.2 5 5 5c1.9 0 3.6-1.1 4.4-2.7-.7.4-1.5.7-2.4.7-2.8 0-5-2.2-5-5 0-.9.2-1.7.6-2.4C10.4 7.2 11.2 7 12 7z"/>
+          </svg>
+        )
+      }
+      // 360 浏览器图标
+      if (browser === '360') {
+        return (
+          <svg className={baseClass} viewBox="0 0 24 24" fill="currentColor" style={{ color: '#14B866' }}>
+            <circle cx="12" cy="12" r="10" opacity="0.2"/>
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+            <path d="M12 6v12M6 12h12"/>
+          </svg>
+        )
+      }
+      // 搜狗浏览器图标（搜索图标）
+      return (
+        <svg className={`${baseClass} text-muted-foreground`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+      )
+    }
+
+    return (
+      <svg
+        className={baseClass}
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        style={{ color: `#${iconData.hex}` }}
+        role="img"
+      >
+        <path d={iconData.path} />
+      </svg>
+    )
   }
 
   const browsers = [

@@ -23,9 +23,6 @@ export abstract class AIProvider {
   protected buildPrompt(request: AIRequest, customPrompt?: string): string {
     const { page, context, options } = request;
 
-    // Debug: 输出已有标签列表
-    console.log('[AI Provider] 已有标签库 (' + context.existingTags.length + '个):', context.existingTags);
-
     if (customPrompt) {
       // Replace placeholders in custom prompt
       return customPrompt
@@ -106,9 +103,6 @@ export abstract class AIProvider {
 
       const parsed = JSON.parse(jsonStr);
 
-      // Debug: 输出 AI 原始返回
-      console.log('[AI Response]', JSON.stringify(parsed, null, 2));
-
       if (!parsed.suggestedTags || !Array.isArray(parsed.suggestedTags)) {
         throw new Error('Invalid response format: suggestedTags not found');
       }
@@ -124,8 +118,6 @@ export abstract class AIProvider {
           isNew: typeof tagObj.isNew === 'boolean' ? tagObj.isNew : true,
           confidence: typeof tagObj.confidence === 'number' ? tagObj.confidence : 0.5
         };
-        // Debug: 输出每个标签的 isNew 值
-        console.log(`[Tag] ${processedTag.name} - isNew: ${processedTag.isNew}`);
         return processedTag;
       });
 
@@ -136,7 +128,6 @@ export abstract class AIProvider {
         translatedDescription: parsed.translatedDescription
       };
     } catch (error) {
-      console.error('Failed to parse AI response:', content);
       throw new AppError(
         'AI_SERVICE_ERROR' as ErrorCode,
         'Failed to parse AI response',

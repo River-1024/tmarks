@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Save, RotateCcw, Settings, Zap, Palette, Chrome, Key, Share2, Database, LogOut, BarChart3 } from 'lucide-react'
+import { Save, RotateCcw, Settings, Zap, Palette, Chrome, Key, Share2, Database, LogOut, BarChart3, Camera } from 'lucide-react'
 import { usePreferences, useUpdatePreferences } from '@/hooks/usePreferences'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
@@ -14,6 +14,7 @@ import { ApiSettingsTab } from '@/components/settings/tabs/ApiSettingsTab'
 import { ShareSettingsTab } from '@/components/settings/tabs/ShareSettingsTab'
 import { DataSettingsTab } from '@/components/settings/tabs/DataSettingsTab'
 import { BookmarkStatisticsPage } from '@/pages/bookmarks/BookmarkStatisticsPage'
+import { SnapshotSettingsTab } from '@/components/settings/tabs/SnapshotSettingsTab'
 
 export function GeneralSettingsPage() {
   const navigate = useNavigate()
@@ -54,6 +55,10 @@ export function GeneralSettingsPage() {
         enable_search_auto_clear: localPreferences.enable_search_auto_clear,
         enable_tag_selection_auto_clear: localPreferences.enable_tag_selection_auto_clear,
         default_bookmark_icon: localPreferences.default_bookmark_icon,
+        snapshot_retention_count: localPreferences.snapshot_retention_count,
+        snapshot_auto_create: localPreferences.snapshot_auto_create,
+        snapshot_auto_dedupe: localPreferences.snapshot_auto_dedupe,
+        snapshot_auto_cleanup_days: localPreferences.snapshot_auto_cleanup_days,
       })
       addToast('success', '设置已保存')
     } catch {
@@ -89,6 +94,7 @@ export function GeneralSettingsPage() {
     { id: 'basic', label: '基础', icon: <Settings className="w-4 h-4" /> },
     { id: 'automation', label: '自动化', icon: <Zap className="w-4 h-4" /> },
     { id: 'appearance', label: '外观', icon: <Palette className="w-4 h-4" /> },
+    { id: 'snapshot', label: '快照', icon: <Camera className="w-4 h-4" /> },
     { id: 'browser', label: '浏览器', icon: <Chrome className="w-4 h-4" /> },
     { id: 'api', label: 'API', icon: <Key className="w-4 h-4" /> },
     { id: 'share', label: '分享', icon: <Share2 className="w-4 h-4" /> },
@@ -159,9 +165,20 @@ export function GeneralSettingsPage() {
           {activeTab === 'appearance' && (
             <AppearanceSettingsTab
               defaultIcon={localPreferences.default_bookmark_icon}
-              tagLayout={localPreferences.tag_layout}
               onIconChange={(icon) => handleUpdate({ default_bookmark_icon: icon })}
-              onTagLayoutChange={(layout) => handleUpdate({ tag_layout: layout })}
+            />
+          )}
+
+          {activeTab === 'snapshot' && (
+            <SnapshotSettingsTab
+              retentionCount={localPreferences.snapshot_retention_count}
+              autoCreate={localPreferences.snapshot_auto_create}
+              autoDedupe={localPreferences.snapshot_auto_dedupe}
+              autoCleanupDays={localPreferences.snapshot_auto_cleanup_days}
+              onRetentionCountChange={(count) => handleUpdate({ snapshot_retention_count: count })}
+              onAutoCreateChange={(enabled) => handleUpdate({ snapshot_auto_create: enabled })}
+              onAutoDedupeChange={(enabled) => handleUpdate({ snapshot_auto_dedupe: enabled })}
+              onAutoCleanupDaysChange={(days) => handleUpdate({ snapshot_auto_cleanup_days: days })}
             />
           )}
 

@@ -9,18 +9,14 @@ import type { Env } from '../../../../../lib/types'
 import { success, notFound, internalError } from '../../../../../lib/response'
 import { requireApiKeyAuth, ApiKeyAuthContext } from '../../../../../middleware/api-key-auth-pages'
 
-interface RouteParams {
-  id: string
-  snapshotId: string
-}
-
 // GET /api/tab/bookmarks/:id/snapshots/:snapshotId - 获取快照
-export const onRequestGet: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[] = [
+export const onRequestGet: PagesFunction<Env, 'id' | 'snapshotId', ApiKeyAuthContext>[] = [
   requireApiKeyAuth('bookmarks.read'),
   async (context) => {
     try {
       const userId = context.data.user_id
-      const { id: bookmarkId, snapshotId } = context.params
+      const bookmarkId = context.params.id as string
+      const snapshotId = context.params.snapshotId as string
       const db = context.env.DB
       const bucket = context.env.SNAPSHOTS_BUCKET
 
@@ -72,14 +68,13 @@ export const onRequestGet: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[] 
       const isV2 = htmlContent.includes('/api/snapshot-images/')
       
       if (isV2) {
-        const version = (snapshot as any).version || 1
-        const baseUrl = new URL(context.request.url).origin
+        const version = (snapshot as Record<string, unknown>).version as number || 1
         
         // 处理图片 URL：规范化所有图片 URL，确保参数正确
         let replacedCount = 0
         htmlContent = htmlContent.replace(
           /\/api\/snapshot-images\/([a-zA-Z0-9._-]+?)(?:\?[^"\s)]*)?(?=["\s)]|$)/g,
-          (match, hash) => {
+          (_match: string, hash: string) => {
             replacedCount++
             // 只替换路径部分，不包含域名（避免重复）
             return `/api/snapshot-images/${hash}?u=${userId}&b=${bookmarkId}&v=${version}`;
@@ -105,11 +100,12 @@ export const onRequestGet: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[] 
 ]
 
 // DELETE /api/tab/bookmarks/:id/snapshots/:snapshotId - 删除快照
-export const onRequestDelete: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[] = [
+export const onRequestDelete: PagesFunction<Env, 'id' | 'snapshotId', ApiKeyAuthContext>[] = [
   requireApiKeyAuth('bookmarks.delete'),
   async (context) => {
     const userId = context.data.user_id
-    const { id: bookmarkId, snapshotId } = context.params
+    const bookmarkId = context.params.id as string
+    const snapshotId = context.params.snapshotId as string
 
     try {
       const db = context.env.DB

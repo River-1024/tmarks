@@ -42,9 +42,6 @@ interface CreateSnapshotV2Request {
   force?: boolean
 }
 
-const MAX_SNAPSHOT_SIZE = 50 * 1024 * 1024 // 50MB
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB per image
-
 // POST /api/tab/bookmarks/:id/snapshots-v2 - 创建快照（V2版本）
 export const onRequestPost: PagesFunction<Env, 'id', ApiKeyAuthContext>[] = [
   requireApiKeyAuth('bookmarks.create'),

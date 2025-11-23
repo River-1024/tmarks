@@ -3,7 +3,7 @@ import type { Env, RouteParams } from '../lib/types'
 import { extractJWT, verifyJWT } from '../lib/jwt'
 import { unauthorized } from '../lib/response'
 
-export interface AuthContext {
+export interface AuthContext extends Record<string, unknown> {
   user_id: string
   session_id?: string
 }

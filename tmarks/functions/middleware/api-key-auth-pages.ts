@@ -11,7 +11,7 @@ import { logApiKeyUsage } from '../lib/api-key/logger'
 import { unauthorized, forbidden, tooManyRequests } from '../lib/response'
 import { hasPermission } from '../../shared/permissions'
 
-export interface ApiKeyAuthContext {
+export interface ApiKeyAuthContext extends Record<string, unknown> {
   user_id: string
   api_key_id: string
   api_key_permissions: string[]

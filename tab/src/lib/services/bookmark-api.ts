@@ -165,7 +165,6 @@ export class BookmarkAPIClient {
       // Check if this is an existing bookmark
       const isExisting = response.meta?.code === 'BOOKMARK_EXISTS';
       if (isExisting) {
-        console.log('[BookmarkAPI] 书签已存在, ID:', response.data.bookmark.id);
         // Return the full bookmark data for the dialog
         return { 
           id: response.data.bookmark.id,
@@ -173,7 +172,6 @@ export class BookmarkAPIClient {
           existingBookmark: response.data.bookmark
         };
       } else {
-        console.log('[BookmarkAPI] 书签创建成功, ID:', response.data.bookmark.id);
         return { 
           id: response.data.bookmark.id,
           isExisting 
@@ -198,14 +196,11 @@ export class BookmarkAPIClient {
     const client = await this.ensureClient();
 
     try {
-      console.log('[BookmarkAPI] Updating tags for bookmark:', bookmarkId, tags);
 
       // 调用更新 API，直接传标签名称
       await client.bookmarks.updateBookmark(bookmarkId, {
         tags  // 后端会自动处理标签创建和链接
       });
-
-      console.log('[BookmarkAPI] Tags updated successfully');
     } catch (error: any) {
       throw new AppError(
         'BOOKMARK_SITE_ERROR' as ErrorCode,
@@ -230,7 +225,6 @@ export class BookmarkAPIClient {
 
     try {
       await client.snapshots.createSnapshot(bookmarkId, data);
-      console.log('[BookmarkAPI] Snapshot created successfully for bookmark:', bookmarkId);
     } catch (error: any) {
       throw new AppError(
         'BOOKMARK_SITE_ERROR' as ErrorCode,
@@ -287,8 +281,6 @@ export class BookmarkAPIClient {
         const error = await response.json();
         throw new Error(error.error?.message || 'Failed to create snapshot');
       }
-
-      console.log('[BookmarkAPI] Snapshot V2 created successfully for bookmark:', bookmarkId);
     } catch (error: any) {
       throw new AppError(
         'BOOKMARK_SITE_ERROR' as ErrorCode,
@@ -307,7 +299,6 @@ export class BookmarkAPIClient {
       await client.user.getMe(); // Test with a lightweight API call
       return true;
     } catch (error) {
-      console.error('API connection test failed:', error);
       return false;
     }
   }

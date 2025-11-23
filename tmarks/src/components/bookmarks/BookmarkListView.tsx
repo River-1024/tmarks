@@ -2,6 +2,9 @@ import { useRef, memo, useState, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Bookmark } from '@/lib/types'
 import { useRecordClick } from '@/hooks/useBookmarks'
+import { usePreferences } from '@/hooks/usePreferences'
+import { DefaultBookmarkIconComponent } from './DefaultBookmarkIcon'
+import { SnapshotViewer } from './SnapshotViewer'
 
 interface BookmarkListViewProps {
   bookmarks: Bookmark[]
@@ -132,7 +135,10 @@ const BookmarkListItem = memo(function BookmarkListItem({
 }: BookmarkListItemProps) {
   const [coverImageError, setCoverImageError] = useState(false)
   const [faviconError, setFaviconError] = useState(false)
+  const [googleFaviconIsDefault, setGoogleFaviconIsDefault] = useState(false)
   const recordClick = useRecordClick()
+  const { data: preferences } = usePreferences()
+  const defaultIcon = preferences?.default_bookmark_icon || 'orbital-spinner'
 
   // 生成Google Favicon URL作为fallback
   const getFaviconUrl = (url: string): string => {
@@ -146,14 +152,22 @@ const BookmarkListItem = memo(function BookmarkListItem({
 
   const googleFaviconUrl = getFaviconUrl(bookmark.url)
   
-  // 决定显示什么图片 - 三级回退策略
+  // 检测 Google Favicon 是否为默认灰色地球图标
+  const checkIfGoogleDefaultIcon = (img: HTMLImageElement) => {
+    if (img.naturalWidth <= 16 && img.naturalHeight <= 16) {
+      setGoogleFaviconIsDefault(true)
+    }
+  }
+  
+  // 决定显示什么图片 - 四级回退策略
   // 1. cover_image (封面图)
   // 2. favicon (网站图标，从插件获取)
-  // 3. Google Favicon API (最终回退)
+  // 3. Google Favicon API (但跳过默认灰色地球)
+  // 4. 动画图标
   const hasCoverImage = bookmark.cover_image && !coverImageError
   const hasFavicon = !hasCoverImage && bookmark.favicon && !faviconError
-  const shouldShowGoogleFavicon = !hasCoverImage && !hasFavicon && googleFaviconUrl && !faviconError
-  const shouldShowImage = hasCoverImage || hasFavicon || shouldShowGoogleFavicon
+  const shouldShowGoogleFavicon = !hasCoverImage && !hasFavicon && googleFaviconUrl && !faviconError && !googleFaviconIsDefault
+  const shouldShowIcon = hasCoverImage || hasFavicon || shouldShowGoogleFavicon
 
   const handleVisit = () => {
     // 记录点击统计
@@ -215,10 +229,10 @@ const BookmarkListItem = memo(function BookmarkListItem({
       <div className="flex flex-col gap-2">
         {/* 第一行：图标 + 标题/URL/状态标签 */}
         <div className="flex flex-row gap-3 sm:gap-4">
-          {/* 封面图/图标 - 三级回退 */}
-          {shouldShowImage && (
-            <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-base-200 flex items-center justify-center">
-              {hasCoverImage ? (
+          {/* 封面图/图标 - 四级回退，始终显示 */}
+          <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-gradient-to-br from-primary/5 to-secondary/5 flex items-center justify-center">
+            {shouldShowIcon ? (
+              hasCoverImage ? (
                 <img
                   src={bookmark.cover_image!}
                   alt={bookmark.title}
@@ -237,11 +251,19 @@ const BookmarkListItem = memo(function BookmarkListItem({
                   src={googleFaviconUrl}
                   alt={bookmark.title}
                   className="w-8 h-8 sm:w-10 sm:h-10 object-contain"
+                  onLoad={(e) => {
+                    const img = e.target as HTMLImageElement
+                    checkIfGoogleDefaultIcon(img)
+                  }}
                   onError={() => setFaviconError(true)}
                 />
-              ) : null}
-            </div>
-          )}
+              ) : null
+            ) : (
+              <div className="w-10 h-10 sm:w-12 sm:h-12">
+                <DefaultBookmarkIconComponent icon={defaultIcon} className="w-full h-full" />
+              </div>
+            )}
+          </div>
 
           {/* 标题和URL区域 */}
           <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -286,10 +308,22 @@ const BookmarkListItem = memo(function BookmarkListItem({
           </p>
         )}
 
-        {/* 第三行：标签（占据整个宽度） */}
-        {bookmark.tags && bookmark.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {bookmark.tags.map((tag) => (
+        {/* 第三行：标签和快照（占据整个宽度） */}
+        {((bookmark.tags && bookmark.tags.length > 0) || (bookmark.has_snapshot && (bookmark.snapshot_count ?? 0) > 0)) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* 快照图标 */}
+            {bookmark.has_snapshot && (bookmark.snapshot_count ?? 0) > 0 && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <SnapshotViewer 
+                  bookmarkId={bookmark.id} 
+                  bookmarkTitle={bookmark.title}
+                  snapshotCount={bookmark.snapshot_count ?? 0}
+                />
+              </div>
+            )}
+            
+            {/* 标签 */}
+            {bookmark.tags && bookmark.tags.map((tag) => (
               <span
                 key={tag.id}
                 className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary"

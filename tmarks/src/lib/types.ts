@@ -149,7 +149,7 @@ export interface TagsResponse {
 export type TagLayoutPreference = 'grid' | 'masonry'
 export type SortByPreference = 'created' | 'updated' | 'pinned' | 'popular'
 
-export type DefaultBookmarkIcon = 'bookmark' | 'star' | 'heart' | 'link' | 'globe' | 'folder'
+export type DefaultBookmarkIcon = 'orbital-spinner'
 
 export interface UserPreferences {
   user_id?: string
@@ -197,17 +197,23 @@ export interface UpdatePreferencesRequest {
   // 3. 默认书签图标
   default_bookmark_icon?: DefaultBookmarkIcon
   
-  // 3. 动画和性能相关
+  // 4. 快照设置
+  snapshot_retention_count?: number
+  snapshot_auto_create?: boolean
+  snapshot_auto_dedupe?: boolean
+  snapshot_auto_cleanup_days?: number
+  
+  // 5. 动画和性能相关
   enable_animations?: boolean
   animation_speed?: 'fast' | 'normal' | 'slow'
   enable_virtual_scroll?: boolean
   
-  // 4. 通知和提示相关
+  // 6. 通知和提示相关
   toast_duration_seconds?: number
   enable_success_sound?: boolean
   auto_copy_share_link?: boolean
   
-  // 5. 自动保存和同步相关
+  // 7. 自动保存和同步相关
   auto_save_delay_seconds?: number
   warn_unsaved_changes?: boolean
   

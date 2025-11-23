@@ -64,7 +64,7 @@ export const onRequestGet: PagesFunction<Env, 'id', AuthContext>[] = [
 
       // 为每个快照生成签名 URL
       const snapshotsWithUrls = await Promise.all(
-        (snapshots.results || []).map(async (snapshot: any) => {
+        (snapshots.results || []).map(async (snapshot: Record<string, unknown>) => {
           // 生成 24 小时有效的签名 URL
           const { signature, expires } = await generateSignedUrl(
             {

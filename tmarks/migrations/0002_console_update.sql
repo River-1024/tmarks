@@ -4,7 +4,7 @@ ALTER TABLE user_preferences ADD COLUMN search_auto_clear_seconds INTEGER NOT NU
 ALTER TABLE user_preferences ADD COLUMN tag_selection_auto_clear_seconds INTEGER NOT NULL DEFAULT 30;
 ALTER TABLE user_preferences ADD COLUMN enable_search_auto_clear INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE user_preferences ADD COLUMN enable_tag_selection_auto_clear INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE user_preferences ADD COLUMN default_bookmark_icon TEXT NOT NULL DEFAULT 'bookmark';
+ALTER TABLE user_preferences ADD COLUMN default_bookmark_icon TEXT NOT NULL DEFAULT 'gradient-glow';
 ALTER TABLE user_preferences ADD COLUMN snapshot_retention_count INTEGER NOT NULL DEFAULT 5;
 ALTER TABLE user_preferences ADD COLUMN snapshot_auto_create INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE user_preferences ADD COLUMN snapshot_auto_dedupe INTEGER NOT NULL DEFAULT 1;

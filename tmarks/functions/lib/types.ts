@@ -39,6 +39,7 @@ export interface Bookmark {
   url: string
   description: string | null
   cover_image: string | null
+  favicon: string | null
   is_pinned: boolean
   is_archived: boolean
   is_public: boolean

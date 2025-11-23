@@ -28,63 +28,42 @@ const DEFAULT_OPTIONS: CaptureOptions = {
  */
 export async function capturePage(options: Partial<CaptureOptions> = {}): Promise<string> {
   const finalOptions = { ...DEFAULT_OPTIONS, ...options }
-  const startTime = Date.now()
   
   try {
-    console.log('[SingleFile] Starting capture with options:', finalOptions)
-    
     // 克隆文档
     const doc = document.cloneNode(true) as Document
-    console.log('[SingleFile] Document cloned')
     
     // 1. 内联 CSS
     if (finalOptions.inlineCSS) {
-      console.log('[SingleFile] Inlining CSS...')
       await inlineStylesheets(doc, finalOptions.timeout!)
     }
     
     // 2. 内联图片
     if (finalOptions.inlineImages) {
-      console.log('[SingleFile] Inlining images...')
       await inlineImages(doc, finalOptions.maxImageSize!, finalOptions.timeout!)
     }
     
     // 3. 内联字体（可选）
     if (finalOptions.inlineFonts) {
-      console.log('[SingleFile] Inlining fonts...')
       await inlineFonts(doc, finalOptions.timeout!)
     }
     
     // 4. 移除脚本
     if (finalOptions.removeScripts) {
-      console.log('[SingleFile] Removing scripts...')
       removeScripts(doc)
     }
     
     // 5. 移除隐藏元素（可选）
     if (finalOptions.removeHiddenElements) {
-      console.log('[SingleFile] Removing hidden elements...')
       removeHiddenElements(doc)
     }
     
     // 6. 添加元数据
-    console.log('[SingleFile] Adding metadata...')
     addMetadata(doc)
     
     const html = doc.documentElement.outerHTML
-    const htmlSize = new Blob([html]).size
-    
-    // 统计 data: URL 的数量
-    const dataUrlCount = (html.match(/src="data:/g) || []).length
-    const duration = Date.now() - startTime
-    
-    console.log(`[SingleFile] Capture completed in ${duration}ms`)
-    console.log(`[SingleFile] HTML size: ${(htmlSize / 1024).toFixed(1)}KB`)
-    console.log(`[SingleFile] Data URLs in HTML: ${dataUrlCount}`)
-    
     return html
   } catch (error) {
-    console.error('[SingleFile] Capture error:', error)
     throw error
   }
 }
@@ -98,7 +77,6 @@ async function inlineStylesheets(doc: Document, timeout: number): Promise<void> 
   
   for (const link of links) {
     if (Date.now() - startTime > timeout) {
-      console.warn('[SingleFile] Stylesheet inlining timeout')
       break
     }
     
@@ -118,10 +96,8 @@ async function inlineStylesheets(doc: Document, timeout: number): Promise<void> 
       style.setAttribute('data-original-href', href)
       style.textContent = processedCSS
       link.replaceWith(style)
-      
-      console.log(`[SingleFile] Inlined stylesheet: ${href}`)
     } catch (error) {
-      console.warn(`[SingleFile] Failed to inline stylesheet: ${(link as HTMLLinkElement).href}`, error)
+      // Silently handle error
     }
   }
   
@@ -166,7 +142,7 @@ async function processCSSUrls(css: string, baseUrl: string): Promise<string> {
       // 否则使用绝对 URL
       processedCSS = processedCSS.replace(match[0], `url(${absoluteUrl})`)
     } catch (error) {
-      console.warn(`[SingleFile] Failed to process CSS URL: ${originalUrl}`, error)
+      // Silently handle error
     }
   }
   
@@ -179,66 +155,42 @@ async function processCSSUrls(css: string, baseUrl: string): Promise<string> {
 async function inlineImages(doc: Document, maxSize: number, timeout: number): Promise<void> {
   const images = Array.from(doc.querySelectorAll('img[src]'))
   const startTime = Date.now()
-  let inlinedCount = 0
-  let skippedCount = 0
-  let alreadyInlinedCount = 0
-  
-  console.log(`[SingleFile] Found ${images.length} images to process`)
   
   for (const img of images) {
     if (Date.now() - startTime > timeout) {
-      console.warn('[SingleFile] Image inlining timeout')
       break
     }
     
     try {
       const src = (img as HTMLImageElement).src
       if (!src) {
-        skippedCount++
         continue
       }
       
       // 已经是 data URL，跳过
       if (src.startsWith('data:')) {
-        alreadyInlinedCount++
         continue
       }
       
-      console.log(`[SingleFile] Processing image: ${src.substring(0, 100)}...`)
-      
       const response = await fetch(src)
       if (!response.ok) {
-        console.warn(`[SingleFile] Failed to fetch image (${response.status}): ${src}`)
-        skippedCount++
         continue
       }
       
       const blob = await response.blob()
-      console.log(`[SingleFile] Image fetched: ${blob.type}, ${(blob.size / 1024).toFixed(1)}KB`)
       
       // 检查大小
       if (blob.size > maxSize) {
-        console.warn(`[SingleFile] Image too large (${(blob.size / 1024).toFixed(1)}KB), skipping: ${src}`)
-        skippedCount++
         continue
       }
       
       const base64 = await blobToBase64(blob)
-      const base64Length = base64.length
-      console.log(`[SingleFile] Image converted to base64: ${(base64Length / 1024).toFixed(1)}KB, starts with: ${base64.substring(0, 50)}...`)
-      
       ;(img as HTMLImageElement).src = base64
       ;(img as HTMLImageElement).setAttribute('data-original-src', src)
-      inlinedCount++
-      
-      console.log(`[SingleFile] Image inlined successfully: ${src.substring(0, 100)}`)
     } catch (error) {
-      console.warn(`[SingleFile] Failed to inline image: ${(img as HTMLImageElement).src}`, error)
-      skippedCount++
+      // Silently handle error
     }
   }
-  
-  console.log(`[SingleFile] Images summary: ${inlinedCount} inlined, ${alreadyInlinedCount} already inline, ${skippedCount} skipped, total: ${images.length}`)
 }
 
 /**
@@ -250,7 +202,6 @@ async function inlineFonts(doc: Document, timeout: number): Promise<void> {
   
   for (const style of styles) {
     if (Date.now() - startTime > timeout) {
-      console.warn('[SingleFile] Font inlining timeout')
       break
     }
     
@@ -277,9 +228,8 @@ async function inlineFonts(doc: Document, timeout: number): Promise<void> {
           const base64 = await blobToBase64(blob)
           
           style.textContent = style.textContent.replace(fontUrl, base64)
-          console.log(`[SingleFile] Inlined font: ${fontUrl}`)
         } catch (error) {
-          console.warn(`[SingleFile] Failed to inline font: ${fontUrl}`, error)
+          // Silently handle error
         }
       }
     }
@@ -292,7 +242,6 @@ async function inlineFonts(doc: Document, timeout: number): Promise<void> {
 function removeScripts(doc: Document): void {
   const scripts = Array.from(doc.querySelectorAll('script'))
   scripts.forEach(script => script.remove())
-  console.log(`[SingleFile] Removed ${scripts.length} scripts`)
 }
 
 /**
@@ -300,17 +249,13 @@ function removeScripts(doc: Document): void {
  */
 function removeHiddenElements(doc: Document): void {
   const elements = Array.from(doc.querySelectorAll('*'))
-  let removedCount = 0
   
   for (const element of elements) {
     const style = window.getComputedStyle(element as Element)
     if (style.display === 'none' || style.visibility === 'hidden') {
       element.remove()
-      removedCount++
     }
   }
-  
-  console.log(`[SingleFile] Removed ${removedCount} hidden elements`)
 }
 
 /**

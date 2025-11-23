@@ -419,7 +419,6 @@ export function Options() {
       setSuccessMessage(`API 测试成功！返回 ${response.suggestedTags.length} 个标签：${response.suggestedTags.map(t => t.name).join(', ')}`);
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
-      console.error('API test failed:', err);
       setError(err instanceof Error ? err.message : 'API 测试失败');
     } finally {
       setIsTesting(false);
@@ -501,7 +500,6 @@ export function Options() {
       setSuccessMessage('已删除保存的连接');
       setTimeout(() => setSuccessMessage(null), 2000);
     } catch (err) {
-      console.error('Failed to delete saved connection:', err);
       setSavedConnections(previous);
       setError(err instanceof Error ? err.message : '删除连接失败');
     }

@@ -119,7 +119,7 @@ export class TagsAPI extends TMarksClient {
         await this.deleteTag(tag.id);
         deleted++;
       } catch (error) {
-        console.error(`Failed to delete tag ${tag.id}:`, error);
+        // Silently handle error
       }
     }
 

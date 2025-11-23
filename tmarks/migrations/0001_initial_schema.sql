@@ -357,8 +357,8 @@ ALTER TABLE user_preferences ADD COLUMN enable_tag_selection_auto_clear INTEGER 
 -- ============================================================================
 
 -- 默认书签图标（当书签没有封面图和网站图标时显示）
--- 可选值: 'bookmark', 'star', 'heart', 'link', 'globe', 'folder'
-ALTER TABLE user_preferences ADD COLUMN default_bookmark_icon TEXT NOT NULL DEFAULT 'bookmark';
+-- 可选值: 'gradient-glow', 'pulse-breath'
+ALTER TABLE user_preferences ADD COLUMN default_bookmark_icon TEXT NOT NULL DEFAULT 'gradient-glow';
 
 -- 网站图标字段（favicon URL）
 -- 优先级: cover_image > favicon > default_bookmark_icon

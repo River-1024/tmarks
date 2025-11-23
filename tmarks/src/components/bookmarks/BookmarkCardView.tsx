@@ -1,7 +1,7 @@
 import type { Bookmark } from '@/lib/types'
 import { AdaptiveImage } from '@/components/common/AdaptiveImage'
 import { useRecordClick } from '@/hooks/useBookmarks'
-import { useState, useEffect, useRef, memo, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ImageType } from '@/lib/image-utils'
 import { DefaultBookmarkIconComponent } from './DefaultBookmarkIcon'
 import { usePreferences } from '@/hooks/usePreferences'
@@ -176,7 +176,7 @@ function BookmarkCard({
   const [googleFaviconIsDefault, setGoogleFaviconIsDefault] = useState(false)
   const recordClick = useRecordClick()
   const { data: preferences } = usePreferences()
-  const defaultIcon = preferences?.default_bookmark_icon || 'bookmark'
+  const defaultIcon = preferences?.default_bookmark_icon || 'orbital-spinner'
 
   // 生成Google Favicon URL作为最终fallback
   const getFaviconUrl = (url: string): string => {
@@ -373,15 +373,17 @@ function BookmarkCard({
         )}
 
         {/* 标签和快照 */}
-        {(bookmark.tags && bookmark.tags.length > 0) || bookmark.has_snapshot ? (
+        {(bookmark.tags && bookmark.tags.length > 0) || (bookmark.has_snapshot && (bookmark.snapshot_count ?? 0) > 0) ? (
           <div className="flex flex-wrap items-center gap-1.5 mt-1">
-            {/* 快照图标 */}
-            {bookmark.has_snapshot && (
-              <SnapshotViewer 
-                bookmarkId={bookmark.id} 
-                bookmarkTitle={bookmark.title}
-                snapshotCount={bookmark.snapshot_count || 0}
-              />
+            {/* 快照图标 - 只在有快照且数量大于0时显示 */}
+            {bookmark.has_snapshot && (bookmark.snapshot_count ?? 0) > 0 && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <SnapshotViewer 
+                  bookmarkId={bookmark.id} 
+                  bookmarkTitle={bookmark.title}
+                  snapshotCount={bookmark.snapshot_count ?? 0}
+                />
+              </div>
             )}
             
             {/* 标签 */}

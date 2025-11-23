@@ -1,6 +1,9 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
 import type { Bookmark } from '@/lib/types'
 import { useRecordClick } from '@/hooks/useBookmarks'
+import { usePreferences } from '@/hooks/usePreferences'
+import { DefaultBookmarkIconComponent } from './DefaultBookmarkIcon'
+import { SnapshotViewer } from './SnapshotViewer'
 
 interface BookmarkTitleViewProps {
   bookmarks: Bookmark[]
@@ -175,6 +178,13 @@ function TitleOnlyCard({
 }: TitleOnlyCardProps) {
   const recordClick = useRecordClick()
   const hasEditClickRef = useRef(false)
+  const { data: preferences } = usePreferences()
+  const defaultIcon = preferences?.default_bookmark_icon || 'orbital-spinner'
+  
+  const [coverImageError, setCoverImageError] = useState(false)
+  const [faviconError, setFaviconError] = useState(false)
+  const [googleFaviconIsDefault, setGoogleFaviconIsDefault] = useState(false)
+  
   const domain = useMemo(() => {
     try {
       return new URL(bookmark.url).hostname
@@ -182,6 +192,34 @@ function TitleOnlyCard({
       return bookmark.url.replace(/^https?:\/\//i, '').split('/')[0] || bookmark.url
     }
   }, [bookmark.url])
+  
+  // 生成Google Favicon URL作为最终fallback
+  const googleFaviconUrl = useMemo(() => {
+    try {
+      const urlObj = new URL(bookmark.url)
+      return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=64`
+    } catch {
+      return ''
+    }
+  }, [bookmark.url])
+  
+  // 检测 Google Favicon 是否为默认灰色地球图标
+  const checkIfGoogleDefaultIcon = (img: HTMLImageElement) => {
+    // Google 的默认图标特征：图片很小（通常是 16x16 或更小）
+    if (img.naturalWidth <= 16 && img.naturalHeight <= 16) {
+      setGoogleFaviconIsDefault(true)
+    }
+  }
+  
+  // 决定显示什么图标 - 与全局一致的回退策略
+  // 1. cover_image (封面图)
+  // 2. favicon (网站图标，从插件获取)
+  // 3. Google Favicon API (但跳过默认灰色地球)
+  // 4. 用户自定义的 SVG 图标
+  const hasCoverImage = bookmark.cover_image && bookmark.cover_image.trim() !== '' && !coverImageError
+  const hasFavicon = !hasCoverImage && bookmark.favicon && bookmark.favicon.trim() !== '' && !faviconError
+  const shouldShowGoogleFavicon = !hasCoverImage && !hasFavicon && googleFaviconUrl && !faviconError && !googleFaviconIsDefault
+  const shouldShowIcon = hasCoverImage || hasFavicon || shouldShowGoogleFavicon
 
   const handleVisit = () => {
     if (!readOnly) {
@@ -271,45 +309,120 @@ function TitleOnlyCard({
             </div>
           )}
           
-          {/* 标题 */}
-          <button
-            type="button"
-            onClick={(event) => {
-              if (hasEditClickRef.current) {
-                hasEditClickRef.current = false
-                event.preventDefault()
-                return
-              }
-              handleCardClick()
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                handleCardClick()
-              }
-            }}
-            className="pointer-events-auto inline-flex max-w-full text-left text-xs sm:text-sm font-semibold leading-snug text-foreground line-clamp-3 sm:line-clamp-2 hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-md pr-9 sm:pr-12"
-          >
-            {bookmark.title?.trim() || bookmark.url}
-          </button>
+          {/* 图标 + 标题 + 域名 在一行 */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* 图标 */}
+            <div className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded overflow-hidden bg-gradient-to-br from-primary/5 to-secondary/5 flex items-center justify-center">
+              {shouldShowIcon ? (
+                hasCoverImage ? (
+                  <img
+                    src={bookmark.cover_image!}
+                    alt=""
+                    className="w-full h-full object-contain"
+                    onError={() => setCoverImageError(true)}
+                  />
+                ) : hasFavicon ? (
+                  <img
+                    src={bookmark.favicon!}
+                    alt=""
+                    className="w-full h-full object-contain"
+                    onError={() => setFaviconError(true)}
+                  />
+                ) : shouldShowGoogleFavicon ? (
+                  <img
+                    src={googleFaviconUrl}
+                    alt=""
+                    className="w-full h-full object-contain"
+                    onLoad={(e) => {
+                      const img = e.target as HTMLImageElement
+                      checkIfGoogleDefaultIcon(img)
+                    }}
+                    onError={() => setFaviconError(true)}
+                  />
+                ) : null
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <DefaultBookmarkIconComponent icon={defaultIcon} className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+              )}
+            </div>
+            
+            {/* 标题和域名容器 */}
+            <div className="flex-1 min-w-0 flex items-baseline gap-1.5 sm:gap-2">
+              {/* 标题 */}
+              <button
+                type="button"
+                onClick={(event) => {
+                  if (hasEditClickRef.current) {
+                    hasEditClickRef.current = false
+                    event.preventDefault()
+                    return
+                  }
+                  handleCardClick()
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    handleCardClick()
+                  }
+                }}
+                className="pointer-events-auto flex-shrink min-w-0 text-left text-xs sm:text-sm font-semibold leading-snug text-foreground truncate hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-md pr-9 sm:pr-12"
+                title={bookmark.title?.trim() || bookmark.url}
+              >
+                {bookmark.title?.trim() || bookmark.url}
+              </button>
+              
+              {/* 域名 */}
+              <a
+                href={bookmark.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pointer-events-auto flex-shrink-0 text-[10px] sm:text-xs text-muted-foreground/60 hover:text-primary transition-colors"
+                onClick={(e) => {
+                  if (batchMode) {
+                    e.preventDefault()
+                    onToggleSelect?.(bookmark.id)
+                  } else if (!readOnly) {
+                    recordClick.mutate(bookmark.id)
+                  }
+                }}
+                title={domain}
+              >
+                {domain}
+              </a>
+            </div>
+          </div>
           
-          {/* 域名 */}
-          <a
-            href={bookmark.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="pointer-events-auto block text-[10px] sm:text-xs text-muted-foreground/70 truncate hover:text-primary"
-            onClick={(e) => {
-              if (batchMode) {
-                e.preventDefault()
-                onToggleSelect?.(bookmark.id)
-              } else if (!readOnly) {
-                recordClick.mutate(bookmark.id)
-              }
-            }}
-          >
-            {domain}
-          </a>
+          {/* 标签和快照 - 从最左边开始 */}
+          {((bookmark.tags && bookmark.tags.length > 0) || (bookmark.has_snapshot && (bookmark.snapshot_count ?? 0) > 0)) && (
+            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pt-0.5">
+              {/* 快照图标 */}
+              {bookmark.has_snapshot && (bookmark.snapshot_count ?? 0) > 0 && (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <SnapshotViewer 
+                    bookmarkId={bookmark.id} 
+                    bookmarkTitle={bookmark.title}
+                    snapshotCount={bookmark.snapshot_count ?? 0}
+                  />
+                </div>
+              )}
+              
+              {/* 标签 */}
+              {bookmark.tags && bookmark.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag.id}
+                  className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium"
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {bookmark.tags && bookmark.tags.length > 3 && (
+                <span className="text-[10px] sm:text-xs text-muted-foreground/60">
+                  +{bookmark.tags.length - 3}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
