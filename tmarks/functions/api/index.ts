@@ -13,7 +13,7 @@ export const onRequestGet: PagesFunction<Env> = async () => {
     name: 'TMarks API',
     version: 'v1',
     description: 'TMarks Bookmark Management API',
-    documentation: 'https://github.com/yourusername/tmarks/blob/main/API.md',
+    documentation: '/api/docs',
     endpoints: {
       bookmarks: {
         list: 'GET /api/bookmarks',
@@ -48,9 +48,7 @@ export const onRequestGet: PagesFunction<Env> = async () => {
       per_day: 10000,
     },
     support: {
-      email: 'support@example.com',
-      docs: 'https://docs.example.com',
-      github: 'https://github.com/yourusername/tmarks',
+      docs: '/help',
     },
   })
 }

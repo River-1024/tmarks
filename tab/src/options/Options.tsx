@@ -24,7 +24,8 @@ export function Options() {
     enableCustomPrompt: false,
     customPrompt: DEFAULT_PROMPT_TEMPLATE,
     maxSuggestedTags: 5,
-    defaultVisibility: 'public' as 'public' | 'private'
+    defaultVisibility: 'public' as 'public' | 'private',
+    enableAI: true
   });
 
   const [stats, setStats] = useState({
@@ -241,7 +242,8 @@ export function Options() {
         enableCustomPrompt: config.aiConfig.enableCustomPrompt || false,
         customPrompt: config.aiConfig.customPrompt || formData.customPrompt,
         maxSuggestedTags: config.preferences.maxSuggestedTags,
-        defaultVisibility: config.preferences.defaultVisibility
+        defaultVisibility: config.preferences.defaultVisibility,
+        enableAI: config.preferences.enableAI ?? true
       });
       const normalizedSaved = normalizeSavedConnections(config.aiConfig.savedConnections);
       setSavedConnections(normalizedSaved);
@@ -359,7 +361,8 @@ export function Options() {
           autoSync: config?.preferences.autoSync ?? true,
           syncInterval: config?.preferences.syncInterval ?? 24,
           maxSuggestedTags: formData.maxSuggestedTags,
-          defaultVisibility: formData.defaultVisibility
+          defaultVisibility: formData.defaultVisibility,
+          enableAI: formData.enableAI
         }
       });
 
@@ -442,7 +445,8 @@ export function Options() {
         enableCustomPrompt: false,
         customPrompt: DEFAULT_PROMPT_TEMPLATE,
         maxSuggestedTags: 5,
-        defaultVisibility: 'public'
+        defaultVisibility: 'public',
+        enableAI: true
       });
       setSuccessMessage('设置已重置');
       setTimeout(() => setSuccessMessage(null), 2000);

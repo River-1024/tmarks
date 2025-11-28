@@ -22,6 +22,13 @@ export const PERMISSIONS = {
   TAGS_ASSIGN: 'tags.assign',
   TAGS_ALL: 'tags.*',
 
+  // 收纳（标签页组）权限
+  TAB_GROUPS_CREATE: 'tab_groups.create',
+  TAB_GROUPS_READ: 'tab_groups.read',
+  TAB_GROUPS_UPDATE: 'tab_groups.update',
+  TAB_GROUPS_DELETE: 'tab_groups.delete',
+  TAB_GROUPS_ALL: 'tab_groups.*',
+
   // AI 权限
   AI_SUGGEST: 'ai.suggest',
 
@@ -65,6 +72,7 @@ export const PERMISSION_TEMPLATES = {
     permissions: [
       PERMISSIONS.BOOKMARKS_ALL,
       PERMISSIONS.TAGS_ALL,
+      PERMISSIONS.TAB_GROUPS_ALL,
       PERMISSIONS.AI_SUGGEST,
       PERMISSIONS.USER_READ,
     ] as string[],
@@ -115,6 +123,11 @@ export function getPermissionLabel(permission: string): string {
     'tags.delete': '删除标签',
     'tags.assign': '分配标签',
     'tags.*': '所有标签权限',
+    'tab_groups.create': '创建收纳',
+    'tab_groups.read': '读取收纳',
+    'tab_groups.update': '更新收纳',
+    'tab_groups.delete': '删除收纳',
+    'tab_groups.*': '所有收纳权限',
     'ai.suggest': 'AI 智能建议',
     'user.read': '读取用户信息',
     'user.preferences.read': '读取用户偏好',
@@ -148,6 +161,15 @@ export function getPermissionGroups(): Array<{
         { value: PERMISSIONS.TAGS_UPDATE, label: getPermissionLabel(PERMISSIONS.TAGS_UPDATE) },
         { value: PERMISSIONS.TAGS_DELETE, label: getPermissionLabel(PERMISSIONS.TAGS_DELETE) },
         { value: PERMISSIONS.TAGS_ASSIGN, label: getPermissionLabel(PERMISSIONS.TAGS_ASSIGN) },
+      ],
+    },
+    {
+      name: '收纳',
+      permissions: [
+        { value: PERMISSIONS.TAB_GROUPS_CREATE, label: getPermissionLabel(PERMISSIONS.TAB_GROUPS_CREATE) },
+        { value: PERMISSIONS.TAB_GROUPS_READ, label: getPermissionLabel(PERMISSIONS.TAB_GROUPS_READ) },
+        { value: PERMISSIONS.TAB_GROUPS_UPDATE, label: getPermissionLabel(PERMISSIONS.TAB_GROUPS_UPDATE) },
+        { value: PERMISSIONS.TAB_GROUPS_DELETE, label: getPermissionLabel(PERMISSIONS.TAB_GROUPS_DELETE) },
       ],
     },
     {

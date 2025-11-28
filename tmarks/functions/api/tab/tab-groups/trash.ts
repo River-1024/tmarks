@@ -1,13 +1,13 @@
 /**
  * 回收站 API
  * 路径: /api/tab/tab-groups/trash
- * 认证: JWT Token (Bearer)
+ * 认证: API Key (X-API-Key header) 或 JWT Token (Bearer)
  */
 
 import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env } from '../../../lib/types'
 import { success, internalError } from '../../../lib/response'
-import { requireAuth, AuthContext } from '../../../middleware/auth'
+import { requireDualAuth, DualAuthContext } from '../../../middleware/dual-auth'
 
 interface TabGroupRow {
   id: string
@@ -21,9 +21,9 @@ interface TabGroupRow {
   updated_at: string
 }
 
-// GET /api/tab-groups/trash - 获取回收站中的标签页组
-export const onRequestGet: PagesFunction<Env, string, AuthContext>[] = [
-  requireAuth,
+// GET /api/tab/tab-groups/trash - 获取回收站中的标签页组
+export const onRequestGet: PagesFunction<Env, string, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.read'),
   async (context) => {
     const userId = context.data.user_id
 

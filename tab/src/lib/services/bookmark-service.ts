@@ -11,14 +11,26 @@ export class BookmarkService {
     let bookmarkId: string | undefined;
     let isExisting = false;
 
+    console.log('[BookmarkService] saveBookmark 开始:', {
+      url: bookmark.url,
+      title: bookmark.title,
+      tags: bookmark.tags,
+      hasThumbnail: !!bookmark.thumbnail,
+      hasFavicon: !!bookmark.favicon,
+      createSnapshot: bookmark.createSnapshot
+    });
+
     try {
       // 1. Save to remote API
+      console.log('[BookmarkService] 步骤1: 调用远程 API...');
       const result = await bookmarkAPI.addBookmark(bookmark);
       bookmarkId = result.id;
       isExisting = result.isExisting || false;
+      console.log('[BookmarkService] 远程 API 返回:', { bookmarkId, isExisting });
 
       // If bookmark exists, return it for the dialog
       if (isExisting && result.existingBookmark) {
+        console.log('[BookmarkService] 书签已存在，返回对话框数据');
         return {
           success: true,
           existingBookmark: {
@@ -31,6 +43,7 @@ export class BookmarkService {
 
       // 2. Save to local cache (only for new bookmarks)
       if (!isExisting) {
+        console.log('[BookmarkService] 步骤2: 保存到本地缓存...');
         await db.bookmarks.add({
           url: bookmark.url,
           title: bookmark.title,
@@ -42,31 +55,64 @@ export class BookmarkService {
         });
 
         // 3. Update tag usage counts
+        console.log('[BookmarkService] 步骤3: 更新标签计数...');
         await this.updateTagCounts(bookmark.tags);
 
         // 4. Update in-memory context cache for AI
+        console.log('[BookmarkService] 步骤4: 更新 AI 上下文缓存...');
         tagRecommender.updateContextWithBookmark({
           title: bookmark.title,
           tags: bookmark.tags
         });
       }
 
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorCode = error?.code || '';
+      const errorStatus = error?.status || 0;
+      
+      // 详细打印错误信息，方便调试
+      console.error('[BookmarkService] ========== 保存书签错误 ==========');
+      console.error('[BookmarkService] 错误消息:', errorMessage);
+      console.error('[BookmarkService] 错误代码:', errorCode);
+      console.error('[BookmarkService] HTTP状态:', errorStatus);
+      console.error('[BookmarkService] 完整错误对象:', error);
+      console.error('[BookmarkService] =====================================');
 
-      // Check if it's a network error
-      if (errorMessage.includes('Network')) {
+      // 判断是否是认证相关错误
+      const isAuthError = errorCode === 'INVALID_API_KEY' || 
+                          errorCode === 'MISSING_API_KEY' ||
+                          errorCode === 'INSUFFICIENT_PERMISSIONS' ||
+                          errorStatus === 401 ||
+                          errorStatus === 403 ||
+                          errorMessage.includes('认证') ||
+                          errorMessage.includes('API Key');
+      
+      console.log('[BookmarkService] 是否认证错误:', isAuthError);
+      
+      // 判断是否是真正的网络错误（无法连接服务器）
+      const isNetworkError = (errorCode === 'NETWORK_ERROR' || errorStatus === 0) &&
+                             !isAuthError &&
+                             (errorMessage.includes('Network') || 
+                              errorMessage.includes('网络') ||
+                              errorMessage.includes('connect'));
+      
+      console.log('[BookmarkService] 是否网络错误:', isNetworkError);
+      
+      if (isNetworkError) {
+        console.log('[BookmarkService] >>> 进入离线队列');
         // Queue for later sync
         await this.queueForLaterSync(bookmark);
 
         return {
           success: true,
           offline: true,
-          message: '已暂存,将在网络恢复后同步'
+          message: '网络不可用，已暂存到本地，将在网络恢复后自动同步'
         };
       }
       
-      // For other errors, throw
+      // 对于认证错误和其他错误，直接抛出，让UI显示详细错误信息
+      console.log('[BookmarkService] >>> 直接抛出错误，不进入离线队列');
       throw error;
     }
 

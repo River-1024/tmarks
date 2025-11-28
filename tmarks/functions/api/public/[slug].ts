@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env, BookmarkRow, PublicProfile } from '../../lib/types'
 import { notFound, success, internalError } from '../../lib/response'
-import { normalizeBookmark } from '../bookmarks/utils'
+import { normalizeBookmark } from '../../lib/bookmark-utils'
 import { CacheService } from '../../lib/cache'
 import { generateCacheKey } from '../../lib/cache/strategies'
 

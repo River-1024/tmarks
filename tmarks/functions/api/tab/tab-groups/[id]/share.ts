@@ -1,13 +1,13 @@
 /**
  * 分享标签页组 API
  * 路径: /api/tab/tab-groups/:id/share
- * 认证: JWT Token (Bearer)
+ * 认证: API Key (X-API-Key header) 或 JWT Token (Bearer)
  */
 
 import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env, RouteParams } from '../../../../lib/types'
 import { success, notFound, internalError } from '../../../../lib/response'
-import { requireAuth, AuthContext } from '../../../../middleware/auth'
+import { requireDualAuth, DualAuthContext } from '../../../../middleware/dual-auth'
 import { generateUUID } from '../../../../lib/crypto'
 
 interface TabGroupRow {
@@ -32,9 +32,9 @@ interface CreateShareRequest {
   expires_in_days?: number
 }
 
-// POST /api/tab-groups/:id/share - 创建分享链接
-export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
-  requireAuth,
+// POST /api/tab/tab-groups/:id/share - 创建分享链接
+export const onRequestPost: PagesFunction<Env, RouteParams, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.update'),
   async (context) => {
     const userId = context.data.user_id
     const groupId = context.params.id
@@ -109,9 +109,9 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
   },
 ]
 
-// GET /api/tab-groups/:id/share - 获取分享信息
-export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
-  requireAuth,
+// GET /api/tab/tab-groups/:id/share - 获取分享信息
+export const onRequestGet: PagesFunction<Env, RouteParams, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.read'),
   async (context) => {
     const userId = context.data.user_id
     const groupId = context.params.id
@@ -139,9 +139,9 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
   },
 ]
 
-// DELETE /api/tab-groups/:id/share - 删除分享
-export const onRequestDelete: PagesFunction<Env, RouteParams, AuthContext>[] = [
-  requireAuth,
+// DELETE /api/tab/tab-groups/:id/share - 删除分享
+export const onRequestDelete: PagesFunction<Env, RouteParams, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.delete'),
   async (context) => {
     const userId = context.data.user_id
     const groupId = context.params.id

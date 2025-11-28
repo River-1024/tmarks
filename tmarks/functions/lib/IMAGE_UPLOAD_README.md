@@ -32,14 +32,17 @@ wrangler r2 bucket create tmarks-snapshots
 
 例如：`https://r2.tmarks.app` 或 `https://pub-xxxxx.r2.dev`
 
-### 3. 更新代码中的 R2 URL
+### 3. 配置环境变量
 
-修改 `tmarks/functions/lib/image-upload.ts` 中的 R2 URL：
+在 Cloudflare Pages 或 `wrangler.toml` 中配置 R2 公开访问域名：
 
-```typescript
-// 第 82 行
-const r2Url = `https://r2.tmarks.app/${r2Key}` // 替换为你的 R2 公开域名
+```toml
+[vars]
+R2_PUBLIC_URL = "https://r2.example.com"
 ```
+
+或在 Cloudflare Dashboard > Pages > Settings > Environment variables 中添加：
+- `R2_PUBLIC_URL` = `https://r2.example.com`
 
 ### 4. 绑定 R2 Bucket 到 Pages
 

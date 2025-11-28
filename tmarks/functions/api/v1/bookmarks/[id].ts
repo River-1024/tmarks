@@ -3,7 +3,7 @@ import type { Env, Bookmark, BookmarkRow, RouteParams, SQLParam } from '../../..
 import { success, badRequest, notFound, noContent, internalError } from '../../../lib/response'
 import { requireAuth, AuthContext } from '../../../middleware/auth'
 import { isValidUrl, sanitizeString } from '../../../lib/validation'
-import { normalizeBookmark } from '../../bookmarks/utils'
+import { normalizeBookmark } from '../../../lib/bookmark-utils'
 import { invalidatePublicShareCache } from '../../shared/cache'
 
 interface UpdateBookmarkRequest {
@@ -103,7 +103,7 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       // 更新标签关联
-      if (body.tags && body.tags.length >= 0) {
+      if (body.tags !== undefined) {
         // 新版：直接传标签名称，后端自动创建或链接
         const { createOrLinkTags } = await import('../../../lib/tags')
         

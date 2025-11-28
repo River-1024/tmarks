@@ -1,0 +1,107 @@
+-- ============================================================================
+-- TMarks v2 升级脚本 - 从旧版本升级到新版本
+-- 适用于已部署旧版本的用户
+-- 更新日期: 2024-11
+-- ============================================================================
+
+-- ============================================================================
+-- 1. bookmarks 表新增字段
+-- ============================================================================
+
+-- 新增 favicon 字段
+ALTER TABLE bookmarks ADD COLUMN favicon TEXT;
+
+-- 新增 cover_image_id 字段（关联 bookmark_images 表）
+ALTER TABLE bookmarks ADD COLUMN cover_image_id TEXT;
+
+-- 新增快照相关字段
+ALTER TABLE bookmarks ADD COLUMN has_snapshot INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE bookmarks ADD COLUMN latest_snapshot_at TEXT;
+ALTER TABLE bookmarks ADD COLUMN snapshot_count INTEGER NOT NULL DEFAULT 0;
+
+-- 新增索引
+CREATE INDEX IF NOT EXISTS idx_bookmarks_has_snapshot ON bookmarks(user_id, has_snapshot, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_cover_image_id ON bookmarks(cover_image_id);
+
+-- ============================================================================
+-- 2. user_preferences 表新增字段
+-- ============================================================================
+
+-- 自动清除设置
+ALTER TABLE user_preferences ADD COLUMN search_auto_clear_seconds INTEGER NOT NULL DEFAULT 15;
+ALTER TABLE user_preferences ADD COLUMN tag_selection_auto_clear_seconds INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE user_preferences ADD COLUMN enable_search_auto_clear INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_preferences ADD COLUMN enable_tag_selection_auto_clear INTEGER NOT NULL DEFAULT 0;
+
+-- 默认书签图标
+ALTER TABLE user_preferences ADD COLUMN default_bookmark_icon TEXT NOT NULL DEFAULT 'gradient-glow';
+
+-- 快照设置
+ALTER TABLE user_preferences ADD COLUMN snapshot_retention_count INTEGER NOT NULL DEFAULT 5;
+ALTER TABLE user_preferences ADD COLUMN snapshot_auto_create INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE user_preferences ADD COLUMN snapshot_auto_dedupe INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_preferences ADD COLUMN snapshot_auto_cleanup_days INTEGER NOT NULL DEFAULT 0;
+
+-- ============================================================================
+-- 3. 新增 bookmark_snapshots 表（网页快照）
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS bookmark_snapshots (
+    id TEXT PRIMARY KEY,
+    bookmark_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    is_latest INTEGER NOT NULL DEFAULT 0,
+    content_hash TEXT NOT NULL,
+    r2_key TEXT NOT NULL,
+    r2_bucket TEXT NOT NULL DEFAULT 'tmarks-snapshots',
+    file_size INTEGER NOT NULL,
+    mime_type TEXT NOT NULL DEFAULT 'text/html',
+    snapshot_url TEXT NOT NULL,
+    snapshot_title TEXT NOT NULL,
+    snapshot_status TEXT NOT NULL DEFAULT 'completed',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookmark_snapshots_bookmark_id ON bookmark_snapshots(bookmark_id);
+CREATE INDEX IF NOT EXISTS idx_bookmark_snapshots_user_id ON bookmark_snapshots(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookmark_snapshots_created_at ON bookmark_snapshots(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bookmark_snapshots_content_hash ON bookmark_snapshots(content_hash);
+CREATE INDEX IF NOT EXISTS idx_bookmark_snapshots_bookmark_latest ON bookmark_snapshots(bookmark_id, is_latest DESC);
+CREATE INDEX IF NOT EXISTS idx_bookmark_snapshots_bookmark_version ON bookmark_snapshots(bookmark_id, version DESC);
+
+-- ============================================================================
+-- 4. 新增 bookmark_images 表（封面图片，支持去重）
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS bookmark_images (
+    id TEXT PRIMARY KEY,
+    bookmark_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    image_hash TEXT NOT NULL,
+    r2_key TEXT NOT NULL,
+    r2_bucket TEXT NOT NULL DEFAULT 'tmarks-snapshots',
+    file_size INTEGER NOT NULL,
+    mime_type TEXT NOT NULL,
+    original_url TEXT NOT NULL,
+    width INTEGER,
+    height INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookmark_images_bookmark_id ON bookmark_images(bookmark_id);
+CREATE INDEX IF NOT EXISTS idx_bookmark_images_user_id ON bookmark_images(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookmark_images_hash ON bookmark_images(image_hash);
+CREATE INDEX IF NOT EXISTS idx_bookmark_images_created_at ON bookmark_images(created_at DESC);
+
+-- ============================================================================
+-- 5. 更新迁移版本记录
+-- ============================================================================
+
+INSERT OR IGNORE INTO schema_migrations (version) VALUES ('0002');

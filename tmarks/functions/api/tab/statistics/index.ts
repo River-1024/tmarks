@@ -1,22 +1,22 @@
 /**
  * 统计数据 API
  * 路径: /api/tab/statistics
- * 认证: JWT Token (Bearer)
+ * 认证: API Key (X-API-Key header) 或 JWT Token (Bearer)
  */
 
 import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env } from '../../../lib/types'
 import { success, internalError } from '../../../lib/response'
-import { requireAuth, AuthContext } from '../../../middleware/auth'
+import { requireDualAuth, DualAuthContext } from '../../../middleware/dual-auth'
 
 interface DomainCount {
   domain: string
   count: number
 }
 
-// GET /api/statistics - 获取使用统计
-export const onRequestGet: PagesFunction<Env, string, AuthContext>[] = [
-  requireAuth,
+// GET /api/tab/statistics - 获取使用统计
+export const onRequestGet: PagesFunction<Env, string, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.read'),
   async (context) => {
     const userId = context.data.user_id
     const url = new URL(context.request.url)

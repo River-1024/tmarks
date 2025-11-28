@@ -152,7 +152,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           autoSync: true,
           syncInterval: 24,
           maxSuggestedTags: 5,
-          defaultVisibility
+          defaultVisibility,
+          enableAI: true
         };
 
     StorageService.saveConfig({

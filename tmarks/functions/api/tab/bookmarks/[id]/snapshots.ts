@@ -240,7 +240,7 @@ export const onRequestPost: PagesFunction<Env, 'id', ApiKeyAuthContext>[] = [
         snapshot: {
           id: snapshotId,
           version,
-          file_size: fileSize,
+          file_size: originalSize,
           content_hash: contentHash,
           created_at: now,
         },

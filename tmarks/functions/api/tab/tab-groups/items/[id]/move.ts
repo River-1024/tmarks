@@ -1,13 +1,13 @@
 /**
  * 内部 API - 移动标签页项到其他分组
  * 路径: /api/tab/tab-groups/items/:id/move
- * 认证: JWT Token (Bearer)
+ * 认证: API Key (X-API-Key header) 或 JWT Token (Bearer)
  */
 
 import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env, RouteParams } from '../../../../../lib/types'
 import { success, badRequest, notFound, internalError } from '../../../../../lib/response'
-import { requireAuth, AuthContext } from '../../../../../middleware/auth'
+import { requireDualAuth, DualAuthContext } from '../../../../../middleware/dual-auth'
 
 interface TabGroupItemRow {
   id: string
@@ -26,9 +26,9 @@ interface MoveItemRequest {
   position?: number
 }
 
-// POST /api/tab-groups/items/:id/move - 移动标签页项到其他分组
-export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
-  requireAuth,
+// POST /api/tab/tab-groups/items/:id/move - 移动标签页项到其他分组
+export const onRequestPost: PagesFunction<Env, RouteParams, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.update'),
   async (context) => {
     const userId = context.data.user_id
     const itemId = context.params.id

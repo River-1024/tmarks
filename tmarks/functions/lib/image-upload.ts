@@ -31,6 +31,7 @@ interface ExistingImage {
  * @param bookmarkId 书签 ID
  * @param bucket R2 Bucket
  * @param db D1 Database
+ * @param r2PublicUrl R2 公开访问域名（如 https://r2.example.com）
  * @returns 上传结果
  */
 export async function uploadCoverImageToR2(
@@ -38,7 +39,8 @@ export async function uploadCoverImageToR2(
   userId: string,
   bookmarkId: string,
   bucket: R2Bucket,
-  db: D1Database
+  db: D1Database,
+  r2PublicUrl: string
 ): Promise<UploadImageResult> {
   try {
     // 1. 下载图片
@@ -97,7 +99,8 @@ export async function uploadCoverImageToR2(
       imageId = existing.id
       r2Key = existing.r2_key
 
-      const r2Url = `https://r2.tmarks.app/${r2Key}` // 替换为你的 R2 公开域名
+      // 使用传入的 R2 公开域名
+      const r2Url = `${r2PublicUrl.replace(/\/$/, '')}/${r2Key}`
 
       return {
         success: true,
@@ -140,8 +143,8 @@ export async function uploadCoverImageToR2(
       .bind(imageId, bookmarkId, userId, imageHash, r2Key, fileSize, contentType, imageUrl, now, now)
       .run()
 
-    // 10. 生成公开访问 URL
-    const r2Url = `https://r2.tmarks.app/${r2Key}` // 替换为你的 R2 公开域名
+    // 10. 生成公开访问 URL（使用传入的 R2 公开域名）
+    const r2Url = `${r2PublicUrl.replace(/\/$/, '')}/${r2Key}`
 
     return {
       success: true,

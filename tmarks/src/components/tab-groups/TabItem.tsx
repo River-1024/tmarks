@@ -103,11 +103,19 @@ export function TabItem({
 
       {/* Favicon */}
       <img
-        src={`https://www.google.com/s2/favicons?domain=${extractDomain(item.url)}&sz=32`}
+        src={item.favicon || `https://www.google.com/s2/favicons?domain=${extractDomain(item.url)}&sz=32`}
         alt=""
         className="w-5 h-5 flex-shrink-0"
         onError={(e) => {
-          e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'
+          const target = e.currentTarget
+          const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${extractDomain(item.url)}&sz=32`
+          // 如果当前不是 Google Favicon API，先尝试它
+          if (!target.src.includes('google.com/s2/favicons')) {
+            target.src = googleFaviconUrl
+          } else {
+            // 最终回退到默认图标
+            target.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%236b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>')
+          }
         }}
       />
 

@@ -180,6 +180,11 @@ export function TabGroupsPage() {
       setIsLoading(true)
       setError(null)
       const groups = await tabGroupsService.getAllTabGroups()
+      // 调试日志：查看返回的数据
+      logger.log('[TabGroupsPage] Loaded groups:', groups.length)
+      groups.forEach((g, i) => {
+        logger.log(`[TabGroupsPage] Group ${i}: ${g.title}, items: ${g.items?.length || 0}`)
+      })
       setTabGroups(groups)
     } catch (err) {
       logger.error('Failed to load tab groups:', err)

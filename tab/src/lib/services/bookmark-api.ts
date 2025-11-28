@@ -16,6 +16,9 @@ export class BookmarkAPIClient {
     const configuredUrl = await StorageService.getBookmarkSiteApiUrl();
     const apiKey = await StorageService.getBookmarkSiteApiKey();
 
+    console.log('[BookmarkAPI] initialize - configuredUrl:', configuredUrl);
+    console.log('[BookmarkAPI] initialize - apiKey exists:', !!apiKey, 'length:', apiKey?.length || 0);
+
     if (!apiKey) {
       throw new AppError(
         'API_KEY_INVALID' as ErrorCode,
@@ -49,9 +52,10 @@ export class BookmarkAPIClient {
   }
 
   private async ensureClient(): Promise<ReturnType<typeof createTMarksClient>> {
-    if (!this.client) {
-      await this.initialize();
-    }
+    // 每次都重新初始化，确保使用最新的 API Key
+    // 这样可以避免 API Key 更新后客户端仍使用旧的 Key
+    await this.initialize();
+    
     if (!this.client) {
       throw new AppError(
         'API_KEY_INVALID' as ErrorCode,
@@ -143,19 +147,28 @@ export class BookmarkAPIClient {
   async addBookmark(bookmark: BookmarkInput): Promise<{ id: string; isExisting?: boolean; existingBookmark?: any }> {
     const client = await this.ensureClient();
 
+    // 构建请求数据
+    const requestData = {
+      title: bookmark.title,
+      url: bookmark.url,
+      description: bookmark.description,
+      cover_image: bookmark.thumbnail,
+      favicon: bookmark.favicon,
+      tags: bookmark.tags,
+      is_public: bookmark.isPublic ?? false
+    };
+
+    // 打印请求数据用于调试
+    console.log('[BookmarkAPI] addBookmark 请求数据:', JSON.stringify(requestData, null, 2));
+
     try {
       // 直接传标签名称，让后端自动创建或链接标签
-      const response = await client.bookmarks.createBookmark({
-        title: bookmark.title,
-        url: bookmark.url,
-        description: bookmark.description,
-        cover_image: bookmark.thumbnail,
-        favicon: bookmark.favicon,
-        tags: bookmark.tags,  // 直接传标签名称数组
-        is_public: bookmark.isPublic ?? false
-      });
+      const response = await client.bookmarks.createBookmark(requestData);
+
+      console.log('[BookmarkAPI] addBookmark 响应:', JSON.stringify(response, null, 2));
 
       if (!response.data.bookmark) {
+        console.error('[BookmarkAPI] addBookmark 失败: 响应中没有 bookmark 数据', response);
         throw new AppError(
           'BOOKMARK_SITE_ERROR' as ErrorCode,
           'Failed to add bookmark: No data returned'
@@ -165,6 +178,7 @@ export class BookmarkAPIClient {
       // Check if this is an existing bookmark
       const isExisting = response.meta?.code === 'BOOKMARK_EXISTS';
       if (isExisting) {
+        console.log('[BookmarkAPI] 书签已存在:', response.data.bookmark.id);
         // Return the full bookmark data for the dialog
         return { 
           id: response.data.bookmark.id,
@@ -172,20 +186,53 @@ export class BookmarkAPIClient {
           existingBookmark: response.data.bookmark
         };
       } else {
+        console.log('[BookmarkAPI] 书签创建成功:', response.data.bookmark.id);
         return { 
           id: response.data.bookmark.id,
           isExisting 
         };
       }
     } catch (error: any) {
-      // 如果是 TMarksAPIError，提取更友好的错误信息
-      const errorMessage = error.message || 'Unknown error';
+      // 详细记录错误信息
+      console.error('[BookmarkAPI] addBookmark 错误:', {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        response: error.response,
+        stack: error.stack
+      });
       
-      throw new AppError(
+      // 根据错误类型提供更友好的中文错误信息
+      let friendlyMessage: string;
+      const errorCode = error.code || '';
+      const errorStatus = error.status || 0;
+      
+      if (errorCode === 'INVALID_API_KEY' || errorCode === 'MISSING_API_KEY' || errorStatus === 401) {
+        friendlyMessage = '认证失败：API Key 无效或已过期，请在设置中检查您的 TMarks API Key';
+      } else if (errorCode === 'INSUFFICIENT_PERMISSIONS' || errorStatus === 403) {
+        friendlyMessage = '权限不足：您的 API Key 没有保存书签的权限';
+      } else if (errorCode === 'RATE_LIMIT_EXCEEDED' || errorStatus === 429) {
+        friendlyMessage = '请求过于频繁，请稍后再试';
+      } else if (errorCode === 'NETWORK_ERROR' || errorStatus === 0) {
+        friendlyMessage = '网络错误：无法连接到 TMarks 服务器，请检查网络连接';
+      } else if (errorStatus >= 500) {
+        friendlyMessage = 'TMarks 服务器错误，请稍后再试';
+      } else {
+        friendlyMessage = error.message || '保存书签失败';
+      }
+      
+      // 创建带有详细信息的错误
+      const appError = new AppError(
         'BOOKMARK_SITE_ERROR' as ErrorCode,
-        `Failed to add bookmark: ${errorMessage}`,
+        friendlyMessage,
         { originalError: error }
       );
+      
+      // 附加原始错误代码，便于上层判断
+      (appError as any).code = errorCode;
+      (appError as any).status = errorStatus;
+      
+      throw appError;
     }
   }
 

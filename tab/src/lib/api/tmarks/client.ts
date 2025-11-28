@@ -96,10 +96,23 @@ export class TMarksClient {
       ...options.headers,
     };
 
+    console.log('[TMarksClient] 发起请求:', {
+      url,
+      method: options.method || 'GET',
+      hasApiKey: !!this.apiKey,
+      apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 8) + '...' : 'none'
+    });
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+      });
+
+      console.log('[TMarksClient] 响应状态:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
       });
 
       // 提取速率限制信息
@@ -110,12 +123,37 @@ export class TMarksClient {
         return undefined as T;
       }
 
-      // 解析响应
-      const data = await response.json();
+      // 尝试解析响应
+      let data: any;
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // 非 JSON 响应，尝试读取文本
+        const text = await response.text();
+        console.error('[TMarksClient] 非 JSON 响应:', { status: response.status, text: text.substring(0, 200) });
+        
+        if (!response.ok) {
+          throw new TMarksAPIError(
+            response.status === 401 ? 'INVALID_API_KEY' : 'UNKNOWN_ERROR',
+            text || `HTTP ${response.status}: ${response.statusText}`,
+            response.status
+          );
+        }
+        
+        // 尝试解析为 JSON
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { message: text };
+        }
+      }
 
       // 处理错误响应
       if (!response.ok) {
-        this.handleErrorResponse(response.status, data as TMarksError);
+        console.error('[TMarksClient] 错误响应数据:', data);
+        this.handleErrorResponse(response.status, data);
       }
 
       return data as T;
@@ -126,6 +164,7 @@ export class TMarksClient {
 
       // 网络错误或其他错误
       if (error instanceof TypeError) {
+        console.error('[TMarksClient] 网络错误:', error);
         throw new TMarksAPIError(
           'NETWORK_ERROR',
           'Network error: Unable to connect to TMarks API',
@@ -134,6 +173,7 @@ export class TMarksClient {
         );
       }
 
+      console.error('[TMarksClient] 未知错误:', error);
       throw new TMarksAPIError(
         'UNKNOWN_ERROR',
         error instanceof Error ? error.message : 'Unknown error occurred',
@@ -203,8 +243,41 @@ export class TMarksClient {
   /**
    * 处理错误响应
    */
-  private handleErrorResponse(status: number, errorData: TMarksError): never {
-    const { code, message, details, retry_after } = errorData.error;
+  private handleErrorResponse(status: number, errorData: TMarksError | any): never {
+    // 安全地提取错误信息，处理各种可能的响应格式
+    let code = 'UNKNOWN_ERROR';
+    let message = 'Unknown error occurred';
+    let details: any = undefined;
+    let retry_after: number | undefined = undefined;
+
+    if (errorData?.error) {
+      // 标准 TMarks 错误格式
+      code = errorData.error.code || code;
+      message = errorData.error.message || message;
+      details = errorData.error.details;
+      retry_after = errorData.error.retry_after;
+    } else if (typeof errorData === 'string') {
+      // 纯文本错误
+      message = errorData;
+    } else if (errorData?.message) {
+      // 简单对象格式
+      message = errorData.message;
+      code = errorData.code || code;
+    }
+
+    // 根据 HTTP 状态码推断错误类型
+    if (status === 401 && code === 'UNKNOWN_ERROR') {
+      code = 'INVALID_API_KEY';
+      message = message || 'Authentication failed';
+    } else if (status === 403 && code === 'UNKNOWN_ERROR') {
+      code = 'INSUFFICIENT_PERMISSIONS';
+      message = message || 'Permission denied';
+    } else if (status === 429 && code === 'UNKNOWN_ERROR') {
+      code = 'RATE_LIMIT_EXCEEDED';
+      message = message || 'Rate limit exceeded';
+    }
+
+    console.error('[TMarksClient] API Error:', { status, code, message, details });
 
     throw new TMarksAPIError(
       code,

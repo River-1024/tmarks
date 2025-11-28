@@ -63,11 +63,14 @@ export function Popup() {
     loadExistingTags();
   }, []);
 
-  // Check if configured
-  const isConfigured = Boolean(
+  // Check if configured (only need bookmark site API key, AI is optional)
+  const isConfigured = Boolean(config && config.bookmarkSite.apiKey);
+
+  // Check if AI is enabled and configured
+  const isAIEnabled = Boolean(
     config &&
-    config.aiConfig.apiKeys[config.aiConfig.provider] &&
-    config.bookmarkSite.apiKey
+    config.preferences.enableAI &&
+    config.aiConfig.apiKeys[config.aiConfig.provider]
   );
 
   // Initialize after config is loaded (only for bookmark mode)
@@ -84,8 +87,14 @@ export function Popup() {
         // Extract page info
         await extractPageInfo();
 
-        // Get AI recommendations
-        await recommendTags();
+        // Check AI status at init time (not from closure)
+        const shouldUseAI =
+          config.preferences.enableAI &&
+          Boolean(config.aiConfig.apiKeys[config.aiConfig.provider]);
+
+        if (shouldUseAI) {
+          await recommendTags();
+        }
 
         setInitialized(true);
       } catch (err) {
@@ -297,9 +306,15 @@ export function Popup() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[10px] text-blue-600 font-medium">
-              推荐 {recommendedTags.length}
-            </span>
+            {isAIEnabled ? (
+              <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[10px] text-blue-600 font-medium">
+                推荐 {recommendedTags.length}
+              </span>
+            ) : (
+              <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] text-amber-600 font-medium">
+                AI 关闭
+              </span>
+            )}
             <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-[10px] text-indigo-600 font-medium">
               已选 {selectedTags.length}
             </span>
@@ -339,6 +354,20 @@ export function Popup() {
             <section className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3.5 text-sm text-gray-700 shadow-lg">
               <LoadingSpinner />
               <p>AI 正在分析当前页面，请稍候...</p>
+            </section>
+          )}
+
+          {!isAIEnabled && !isRecommending && recommendedTags.length === 0 && (
+            <section className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-3.5 shadow-lg">
+              <div className="flex items-start gap-3">
+                <svg className="h-5 w-5 flex-shrink-0 text-amber-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-amber-800">AI 推荐已关闭</p>
+                  <p className="mt-1 text-xs text-amber-600">请从下方标签库中选择标签，或在设置中启用 AI 推荐。</p>
+                </div>
+              </div>
             </section>
           )}
 

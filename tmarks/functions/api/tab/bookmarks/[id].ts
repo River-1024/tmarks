@@ -9,7 +9,7 @@ import type { Env, BookmarkRow, RouteParams, SQLParam } from '../../../lib/types
 import { success, badRequest, notFound, noContent, internalError } from '../../../lib/response'
 import { requireApiKeyAuth, ApiKeyAuthContext } from '../../../middleware/api-key-auth-pages'
 import { isValidUrl, sanitizeString } from '../../../lib/validation'
-import { normalizeBookmark } from './utils'
+import { normalizeBookmark } from '../../../lib/bookmark-utils'
 import { invalidatePublicShareCache } from '../../shared/cache'
 
 interface UpdateBookmarkRequest {
@@ -17,7 +17,9 @@ interface UpdateBookmarkRequest {
   url?: string
   description?: string
   cover_image?: string
-  tag_ids?: string[]
+  favicon?: string
+  tag_ids?: string[]  // 兼容旧版：标签 ID 数组
+  tags?: string[]     // 新版：标签名称数组（推荐）
   is_pinned?: boolean
   is_archived?: boolean
   is_public?: boolean
@@ -133,6 +135,12 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[
         values.push(body.cover_image ? sanitizeString(body.cover_image, 2000) : null)
       }
 
+      // Favicon
+      if (body.favicon !== undefined) {
+        updates.push('favicon = ?')
+        values.push(body.favicon ? sanitizeString(body.favicon, 2000) : null)
+      }
+
       // 置顶
       if (body.is_pinned !== undefined) {
         updates.push('is_pinned = ?')
@@ -165,7 +173,21 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[
       }
 
       // 更新标签关联
-      if (body.tag_ids !== undefined) {
+      if (body.tags !== undefined) {
+        // 新版：直接传标签名称，后端自动创建或链接
+        const { createOrLinkTags } = await import('../../../lib/tags')
+        
+        // 删除现有标签关联
+        await context.env.DB.prepare('DELETE FROM bookmark_tags WHERE bookmark_id = ?')
+          .bind(bookmarkId)
+          .run()
+        
+        // 创建或链接新标签
+        if (body.tags.length > 0) {
+          await createOrLinkTags(context.env.DB, bookmarkId, body.tags, userId)
+        }
+      } else if (body.tag_ids !== undefined) {
+        // 兼容旧版：传标签 ID
         // 删除旧的标签关联
         await context.env.DB.prepare('DELETE FROM bookmark_tags WHERE bookmark_id = ?')
           .bind(bookmarkId)

@@ -9,7 +9,7 @@ import type { Env, BookmarkRow, RouteParams, SQLParam } from '../../lib/types'
 import { success, badRequest, notFound, noContent, internalError } from '../../lib/response'
 import { requireApiKeyAuth, ApiKeyAuthContext } from '../../middleware/api-key-auth-pages'
 import { isValidUrl, sanitizeString } from '../../lib/validation'
-import { normalizeBookmark } from './utils'
+import { normalizeBookmark } from '../../lib/bookmark-utils'
 import { invalidatePublicShareCache } from '../shared/cache'
 
 interface UpdateBookmarkRequest {

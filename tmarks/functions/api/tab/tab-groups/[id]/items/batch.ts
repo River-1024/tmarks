@@ -1,13 +1,13 @@
 /**
  * 内部 API - 批量添加标签页项到分组
  * 路径: /api/tab/tab-groups/:id/items/batch
- * 认证: JWT Token (Bearer)
+ * 认证: API Key (X-API-Key header) 或 JWT Token (Bearer)
  */
 
 import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env, RouteParams } from '../../../../../lib/types'
 import { success, badRequest, notFound, internalError } from '../../../../../lib/response'
-import { requireAuth, AuthContext } from '../../../../../middleware/auth'
+import { requireDualAuth, DualAuthContext } from '../../../../../middleware/dual-auth'
 import { sanitizeString } from '../../../../../lib/validation'
 import { generateUUID } from '../../../../../lib/crypto'
 
@@ -25,9 +25,9 @@ interface BatchAddItemsRequest {
   }>
 }
 
-// POST /api/tab-groups/:id/items/batch - 批量添加标签页项
-export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
-  requireAuth,
+// POST /api/tab/tab-groups/:id/items/batch - 批量添加标签页项
+export const onRequestPost: PagesFunction<Env, RouteParams, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.update'),
   async (context) => {
     const userId = context.data.user_id
     const groupId = context.params.id

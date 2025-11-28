@@ -1,13 +1,13 @@
 /**
  * 内部 API - 单个标签页项操作
  * 路径: /api/tab/tab-groups/items/:id
- * 认证: JWT Token (Bearer)
+ * 认证: API Key (X-API-Key header) 或 JWT Token (Bearer)
  */
 
 import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env, RouteParams } from '../../../../lib/types'
 import { success, badRequest, notFound, internalError } from '../../../../lib/response'
-import { requireAuth, AuthContext } from '../../../../middleware/auth'
+import { requireDualAuth, DualAuthContext } from '../../../../middleware/dual-auth'
 import { sanitizeString } from '../../../../lib/validation'
 
 interface TabGroupItemRow {
@@ -31,9 +31,9 @@ interface UpdateTabGroupItemRequest {
   position?: number
 }
 
-// PATCH /api/tab-groups/items/:id - 更新标签页项
-export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
-  requireAuth,
+// PATCH /api/tab/tab-groups/items/:id - 更新标签页项
+export const onRequestPatch: PagesFunction<Env, RouteParams, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.update'),
   async (context) => {
     const userId = context.data.user_id
     const itemId = context.params.id
@@ -133,9 +133,9 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
   },
 ]
 
-// DELETE /api/tab-groups/items/:id - 删除标签页项
-export const onRequestDelete: PagesFunction<Env, RouteParams, AuthContext>[] = [
-  requireAuth,
+// DELETE /api/tab/tab-groups/items/:id - 删除标签页项
+export const onRequestDelete: PagesFunction<Env, RouteParams, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.delete'),
   async (context) => {
     const userId = context.data.user_id
     const itemId = context.params.id

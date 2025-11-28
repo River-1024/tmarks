@@ -116,8 +116,9 @@ function formatSize(bytes) {
 
 /**
  * 创建 ZIP 压缩包
+ * 注意：始终使用 dist/manifest.json（已被 Vite 正确转换），不使用 manifests/ 目录下的文件
  */
-async function createZip(sourceDir, outputPath, manifestPath) {
+async function createZip(sourceDir, outputPath) {
     return new Promise((resolve, reject) => {
         const output = createWriteStream(outputPath)
         const archive = archiver('zip', {
@@ -134,13 +135,8 @@ async function createZip(sourceDir, outputPath, manifestPath) {
 
         archive.pipe(output)
 
-        // 添加整个 dist 目录的内容
+        // 直接添加整个 dist 目录（包含已正确转换的 manifest.json）
         archive.directory(sourceDir, false)
-
-        // 如果提供了自定义 manifest，替换默认的
-        if (manifestPath && existsSync(manifestPath)) {
-            archive.file(manifestPath, { name: 'manifest.json' })
-        }
 
         archive.finalize()
     })
@@ -148,25 +144,20 @@ async function createZip(sourceDir, outputPath, manifestPath) {
 
 /**
  * 构建单个浏览器版本
+ * 注意：所有浏览器版本都使用相同的构建产物（dist 目录），
+ * 因为 manifest.json 已被 Vite 正确转换，包含正确的文件路径
  */
 async function buildBrowser(browser, distSize) {
-    const manifestPath = join(TAB_ROOT, browser.manifest)
     const outputPath = join(OUTPUT_DIR, browser.outputFile)
-
-    // 检查 manifest 文件
-    if (!existsSync(manifestPath)) {
-        logError(`Manifest 文件不存在: ${browser.manifest}`)
-        return null
-    }
 
     // 删除旧的 ZIP 文件
     if (existsSync(outputPath)) {
         await rm(outputPath, { force: true })
     }
 
-    // 创建 ZIP
+    // 创建 ZIP（使用 dist 目录中已转换的 manifest.json）
     log(`  正在压缩 ${browser.name} 版本...`, colors.dim)
-    const zipSize = await createZip(DIST_DIR, outputPath, manifestPath)
+    const zipSize = await createZip(DIST_DIR, outputPath)
 
     // 验证结果
     if (!existsSync(outputPath)) {
@@ -246,19 +237,8 @@ async function main() {
             logSuccess('输出目录存在')
         }
 
-        // 检查 manifest 文件
-        let missingManifests = 0
-        browsers.forEach(browser => {
-            const manifestPath = join(TAB_ROOT, browser.manifest)
-            if (!existsSync(manifestPath)) {
-                logWarning(`${browser.name} manifest 不存在: ${browser.manifest}`)
-                missingManifests++
-            }
-        })
-
-        if (missingManifests > 0) {
-            logWarning(`${missingManifests} 个浏览器的 manifest 文件缺失`)
-        }
+        // 注意：所有浏览器版本都使用 dist/manifest.json（已被 Vite 正确转换）
+        // 不再检查 manifests/ 目录下的文件
 
         // 步骤 2: 清理旧文件
         currentStep++

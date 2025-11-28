@@ -19,6 +19,8 @@
     "db:migrate:local": "wrangler d1 migrations apply tmarks-prod-db --local",
     "db:auto-migrate": "node scripts/auto-migrate.js",
     "db:auto-migrate:local": "node scripts/auto-migrate.js --local",
+    "db:check": "node scripts/check-db-schema.js",
+    "db:check:local": "node scripts/check-db-schema.js --local",
     "deploy": "pwsh scripts/deploy.ps1",
     "prepare": "husky"
   },

@@ -1,13 +1,13 @@
 /**
  * 恢复标签页组 API
  * 路径: /api/tab/tab-groups/:id/restore
- * 认证: JWT Token (Bearer)
+ * 认证: API Key (X-API-Key header) 或 JWT Token (Bearer)
  */
 
 import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env, RouteParams } from '../../../../lib/types'
 import { success, notFound, internalError } from '../../../../lib/response'
-import { requireAuth, AuthContext } from '../../../../middleware/auth'
+import { requireDualAuth, DualAuthContext } from '../../../../middleware/dual-auth'
 
 interface TabGroupRow {
   id: string
@@ -15,9 +15,9 @@ interface TabGroupRow {
   is_deleted: number
 }
 
-// POST /api/tab-groups/:id/restore - 从回收站恢复标签页组
-export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
-  requireAuth,
+// POST /api/tab/tab-groups/:id/restore - 从回收站恢复标签页组
+export const onRequestPost: PagesFunction<Env, RouteParams, DualAuthContext>[] = [
+  requireDualAuth('tab_groups.update'),
   async (context) => {
     const userId = context.data.user_id
     const groupId = context.params.id
