@@ -346,7 +346,7 @@ export const useNewtabStore = create<NewTabState>((set, get) => ({
 
   // 文件夹操作
   addFolder: (name, groupId) => {
-    const { shortcutFolders, activeGroupId, saveData } = get();
+    const { shortcuts, shortcutGroups, shortcutFolders, activeGroupId, settings, gridItems, saveData } = get();
     const newFolder: ShortcutFolder = {
       id: generateId(),
       name,
@@ -354,20 +354,23 @@ export const useNewtabStore = create<NewTabState>((set, get) => ({
       groupId: groupId ?? activeGroupId ?? undefined,
       createdAt: Date.now(),
     };
-    set({ shortcutFolders: [...shortcutFolders, newFolder] });
+    const newFolders = [...shortcutFolders, newFolder];
+    set({ shortcutFolders: newFolders });
     saveData();
+    debouncedSync({ shortcuts, groups: shortcutGroups, folders: newFolders, settings, gridItems });
     return newFolder.id;
   },
 
   updateFolder: (id, updates) => {
-    const { shortcutFolders, saveData } = get();
+    const { shortcuts, shortcutGroups, shortcutFolders, settings, gridItems, saveData } = get();
     const newFolders = shortcutFolders.map((f) => (f.id === id ? { ...f, ...updates } : f));
     set({ shortcutFolders: newFolders });
     saveData();
+    debouncedSync({ shortcuts, groups: shortcutGroups, folders: newFolders, settings, gridItems });
   },
 
   removeFolder: (id) => {
-    const { shortcutFolders, shortcuts, saveData } = get();
+    const { shortcuts, shortcutGroups, shortcutFolders, settings, gridItems, saveData } = get();
     // 删除文件夹时，将文件夹内的快捷方式移出
     const updatedShortcuts = shortcuts.map((s) =>
       s.folderId === id ? { ...s, folderId: undefined } : s
@@ -375,6 +378,7 @@ export const useNewtabStore = create<NewTabState>((set, get) => ({
     const filtered = shortcutFolders.filter((f) => f.id !== id);
     set({ shortcutFolders: filtered, shortcuts: updatedShortcuts });
     saveData();
+    debouncedSync({ shortcuts: updatedShortcuts, groups: shortcutGroups, folders: filtered, settings, gridItems });
   },
 
   getFolderShortcuts: (folderId) => {
@@ -383,12 +387,13 @@ export const useNewtabStore = create<NewTabState>((set, get) => ({
   },
 
   moveShortcutToFolder: (shortcutId, folderId) => {
-    const { shortcuts, saveData } = get();
+    const { shortcuts, shortcutGroups, shortcutFolders, settings, gridItems, saveData } = get();
     const newShortcuts = shortcuts.map((s) =>
       s.id === shortcutId ? { ...s, folderId } : s
     );
     set({ shortcuts: newShortcuts });
     saveData();
+    debouncedSync({ shortcuts: newShortcuts, groups: shortcutGroups, folders: shortcutFolders, settings, gridItems });
   },
 
   // 网格项操作

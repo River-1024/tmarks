@@ -1,5 +1,18 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
+import { 
+  LayoutGrid, 
+  List, 
+  AlignLeft, 
+  Type, 
+  Eye, 
+  Lock, 
+  Layers, 
+  Calendar, 
+  RefreshCw, 
+  Bookmark as BookmarkIcon, 
+  TrendingUp 
+} from 'lucide-react'
 import { TagSidebar } from '@/components/tags/TagSidebar'
 import { BookmarkListContainer } from '@/components/bookmarks/BookmarkListContainer'
 import { PaginationFooter } from '@/components/common/PaginationFooter'
@@ -29,97 +42,50 @@ const SORT_LABELS: Record<SortOption, string> = {
 // 分页配置
 const PAGE_SIZE = 30 // 每页显示30个书签
 
+// 视图模式图标组件
 function ViewModeIcon({ mode }: { mode: ViewMode }) {
-  if (mode === 'card') {
-    return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5h6v6h-6zM4 15h6v6H4zM14 15h6v6h-6z" />
-      </svg>
-    )
+  switch (mode) {
+    case 'card':
+      return <LayoutGrid className="w-4 h-4" />
+    case 'list':
+      return <List className="w-4 h-4" />
+    case 'minimal':
+      return <AlignLeft className="w-4 h-4" />
+    case 'title':
+      return <Type className="w-4 h-4" />
+    default:
+      return <LayoutGrid className="w-4 h-4" />
   }
-
-  if (mode === 'minimal') {
-    return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10 5.5v13M17 5.5v13" />
-      </svg>
-    )
-  }
-
-  if (mode === 'title') {
-    return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h8M4 12h12M4 18h10" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M14 5v2M18 11v2M16 17v2" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18l-7 8v6l-4 2v-8L3 4z" />
-    </svg>
-  )
 }
 
+// 可见性筛选图标组件
 function VisibilityIcon({ filter }: { filter: VisibilityFilter }) {
-  if (filter === 'public') {
-    return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    )
+  switch (filter) {
+    case 'public':
+      return <Eye className="w-4 h-4" />
+    case 'private':
+      return <Lock className="w-4 h-4" />
+    case 'all':
+      return <Layers className="w-4 h-4" />
+    default:
+      return <Layers className="w-4 h-4" />
   }
-
-  if (filter === 'private') {
-    return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-        <rect x="4" y="10" width="16" height="10" rx="2" ry="2" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8 10V7a4 4 0 118 0v3" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-    </svg>
-  )
 }
 
+// 排序图标组件
 function SortIcon({ sort }: { sort: SortOption }) {
-  if (sort === 'created') {
-    return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16 2v4M8 2v4M3 10h18" />
-      </svg>
-    )
+  switch (sort) {
+    case 'created':
+      return <Calendar className="w-4 h-4" />
+    case 'updated':
+      return <RefreshCw className="w-4 h-4" />
+    case 'pinned':
+      return <BookmarkIcon className="w-4 h-4" />
+    case 'popular':
+      return <TrendingUp className="w-4 h-4" />
+    default:
+      return <Calendar className="w-4 h-4" />
   }
-
-  if (sort === 'updated') {
-    return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-    )
-  }
-
-  if (sort === 'pinned') {
-    return (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-    </svg>
-  )
 }
 
 export function PublicSharePage() {
@@ -130,7 +96,7 @@ export function PublicSharePage() {
   const [debouncedSearchKeyword, setDebouncedSearchKeyword] = useState('')
   const [searchMode, setSearchMode] = useState<'bookmark' | 'tag'>('bookmark')
   const [viewMode, setViewMode] = useState<ViewMode>('card')
-  const [sortBy, setSortBy] = useState<SortOption>('popular')
+  const [sortBy, setSortBy] = useState<SortOption>('created')
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all')
   const [tagLayout, setTagLayout] = useState<'grid' | 'masonry'>('grid')
   const [isTagSidebarOpen, setIsTagSidebarOpen] = useState(false)
@@ -414,7 +380,7 @@ export function PublicSharePage() {
                 </div>
 
                 {/* 顶部操作栏 */}
-                <div className="card shadow-float">
+                <div className="p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                     {/* 移动端标签抽屉按钮 + 搜索框 */}
                     <div className="flex items-center gap-3 flex-1 w-full sm:min-w-[280px]">
@@ -468,11 +434,12 @@ export function PublicSharePage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                    <div className="flex items-center gap-1 w-full sm:w-auto">
                       {/* 排序按钮 - 点击循环切换 */}
                       <button
                         onClick={handleSortByChange}
-                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center transition-all shadow-float bg-muted text-foreground hover:bg-muted/80 touch-manipulation flex-shrink-0"
+                        className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-primary/10 flex-shrink-0"
+                        style={{color: 'var(--foreground)'}}
                         title={`${SORT_LABELS[sortBy]} (点击切换)`}
                         aria-label={`${SORT_LABELS[sortBy]} (点击切换)`}
                         type="button"
@@ -483,12 +450,14 @@ export function PublicSharePage() {
                       {/* 可见性筛选按钮 - 点击循环切换 */}
                       <button
                         onClick={handleVisibilityChange}
-                        className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center transition-all shadow-float touch-manipulation flex-shrink-0 ${visibilityFilter === 'all'
-                          ? 'bg-muted text-foreground hover:bg-muted/80'
-                          : visibilityFilter === 'public'
-                            ? 'bg-success/10 text-success hover:bg-success/20'
-                            : 'bg-warning/10 text-warning hover:bg-warning/20'
-                          }`}
+                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all flex-shrink-0 ${
+                          visibilityFilter === 'all'
+                            ? 'hover:bg-primary/10'
+                            : visibilityFilter === 'public'
+                            ? 'text-success hover:bg-success/10'
+                            : 'text-warning hover:bg-warning/10'
+                        }`}
+                        style={{color: visibilityFilter === 'all' ? 'var(--foreground)' : undefined}}
                         title={`${VISIBILITY_LABELS[visibilityFilter]} (点击切换)`}
                         aria-label={`${VISIBILITY_LABELS[visibilityFilter]} (点击切换)`}
                         type="button"
@@ -499,7 +468,8 @@ export function PublicSharePage() {
                       {/* 视图模式按钮 - 点击循环切换 */}
                       <button
                         onClick={handleViewModeChange}
-                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center transition-all shadow-float bg-muted text-foreground hover:bg-muted/80 touch-manipulation flex-shrink-0"
+                        className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:bg-primary/10 flex-shrink-0"
+                        style={{color: 'var(--foreground)'}}
                         title={`${getViewModeLabel(viewMode)} (点击切换)`}
                         aria-label={`${getViewModeLabel(viewMode)} (点击切换)`}
                         type="button"

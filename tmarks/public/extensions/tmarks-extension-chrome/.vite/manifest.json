@@ -1,6 +1,6 @@
 {
   "../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-UPYShlJm.js",
+    "file": "assets/crx-manifest.js-DnDDiO2a.js",
     "name": "crx-manifest.js",
     "src": "../../../../@crx/manifest",
     "isEntry": true
@@ -112,7 +112,7 @@
     "isDynamicEntry": true
   },
   "src/newtab/index.html": {
-    "file": "assets/newtab-NnfRs3E0.js",
+    "file": "assets/newtab-AD7ghiYx.js",
     "name": "newtab",
     "src": "src/newtab/index.html",
     "isEntry": true,

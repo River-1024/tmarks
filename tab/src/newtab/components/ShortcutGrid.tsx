@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, FolderPlus } from 'lucide-react';
+import { Plus, Link, FolderPlus } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -351,36 +351,65 @@ export function ShortcutGrid({ columns, style, onAddClick, onBatchEditClick }: S
     setShowAddToFolderModal(false);
   };
 
-  // 添加按钮
-  const AddButton = () => (
-    <button
-      onClick={onAddClick}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        if (onBatchEditClick) onBatchEditClick();
-      }}
-      className="flex flex-col items-center gap-2 cursor-pointer group w-16"
-      title="添加快捷方式 | 右键批量编辑"
-    >
-      <div className="w-14 h-14 rounded-[18px] bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-all border border-white/10">
-        <Plus className="w-6 h-6 text-white/60" />
-      </div>
-      <span className="text-sm text-white/60">添加</span>
-    </button>
-  );
+  // 添加菜单状态
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
 
-  // 添加文件夹按钮
-  const AddFolderButton = () => (
-    <button
-      onClick={() => setShowAddFolderModal(true)}
-      className="flex flex-col items-center gap-2 cursor-pointer group w-16"
-      title="新建文件夹"
-    >
-      <div className="w-14 h-14 rounded-[18px] bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-all border border-white/10">
-        <FolderPlus className="w-6 h-6 text-white/60" />
-      </div>
-      <span className="text-sm text-white/60">文件夹</span>
-    </button>
+  // 点击外部关闭菜单
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setShowAddMenu(false);
+      }
+    };
+    if (showAddMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showAddMenu]);
+
+  // 统一添加按钮（点击显示菜单，右键批量编辑）
+  const AddButton = () => (
+    <div ref={addMenuRef} className="relative flex flex-col items-center gap-2 w-16">
+      <button
+        onClick={() => setShowAddMenu(!showAddMenu)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (onBatchEditClick) onBatchEditClick();
+        }}
+        className="w-14 h-14 rounded-[18px] bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all border border-white/10 cursor-pointer group"
+        title="添加 | 右键批量编辑"
+      >
+        <Plus className={`w-6 h-6 text-white/60 transition-transform ${showAddMenu ? 'rotate-45' : ''}`} />
+      </button>
+      <span className="text-sm text-white/60">添加</span>
+      
+      {/* 下拉菜单 */}
+      {showAddMenu && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 min-w-[140px] py-2 rounded-xl bg-black/70 backdrop-blur-xl border border-white/10 shadow-xl animate-scaleIn">
+          <button
+            onClick={() => {
+              setShowAddMenu(false);
+              if (onAddClick) onAddClick();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/80 hover:bg-white/10 transition-colors"
+          >
+            <Link className="w-4 h-4" />
+            快捷方式
+          </button>
+          <button
+            onClick={() => {
+              setShowAddMenu(false);
+              setShowAddFolderModal(true);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/80 hover:bg-white/10 transition-colors"
+          >
+            <FolderPlus className="w-4 h-4" />
+            文件夹
+          </button>
+        </div>
+      )}
+    </div>
   );
 
   return (
@@ -423,12 +452,7 @@ export function ShortcutGrid({ columns, style, onAddClick, onBatchEditClick }: S
                         />
                       )
                     ))}
-                    {pageIndex === pages.length - 1 && (
-                      <>
-                        {onAddClick && <AddButton />}
-                        <AddFolderButton />
-                      </>
-                    )}
+                    {pageIndex === pages.length - 1 && <AddButton />}
                   </div>
                 </SortableContext>
               </div>

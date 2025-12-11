@@ -60,7 +60,7 @@ function getDefaultPreferences(): UserPreferences {
     view_mode: storedViewMode || 'list',
     density: 'normal',
     tag_layout: 'grid',
-    sort_by: 'popular',
+    sort_by: 'created',
     search_auto_clear_seconds: 15,
     tag_selection_auto_clear_seconds: 30,
     enable_search_auto_clear: true,

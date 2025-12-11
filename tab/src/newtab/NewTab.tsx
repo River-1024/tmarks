@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useCallback, useRef, useState } from 'react';
-import { Plus, Edit } from 'lucide-react';
+import { Plus, Edit, FolderPlus } from 'lucide-react';
 import { useNewtabStore } from './hooks/useNewtabStore';
 import { Clock } from './components/Clock';
 import { SearchBar } from './components/SearchBar';
@@ -16,14 +16,16 @@ import { Poetry } from './components/Poetry';
 import { GroupSidebar } from './components/GroupSidebar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AddShortcutModal } from './components/AddShortcutModal';
+import { AddFolderModal } from './components/AddFolderModal';
 import { BatchEditModal } from './components/BatchEditModal';
 import { ShortcutContextMenu } from './components/ShortcutContextMenu';
 import { FAVICON_API } from './constants';
 
 export function NewTab() {
-  const { settings, isLoading, loadData, updateSettings, shortcutGroups, activeGroupId, setActiveGroup, addShortcut } = useNewtabStore();
+  const { settings, isLoading, loadData, updateSettings, shortcutGroups, activeGroupId, setActiveGroup, addShortcut, addFolder } = useNewtabStore();
   const [showSettings, setShowSettings] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddFolderModal, setShowAddFolderModal] = useState(false);
   const [showBatchEdit, setShowBatchEdit] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const wheelTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
@@ -241,6 +243,13 @@ export function NewTab() {
         onClose={() => setShowBatchEdit(false)}
       />
 
+      {/* 添加文件夹弹窗 */}
+      <AddFolderModal
+        isOpen={showAddFolderModal}
+        onClose={() => setShowAddFolderModal(false)}
+        onSave={(name) => addFolder(name, activeGroupId ?? undefined)}
+      />
+
       {/* 右键菜单 */}
       {contextMenu && (
         <ShortcutContextMenu
@@ -251,6 +260,11 @@ export function NewTab() {
               label: '添加快捷方式',
               icon: <Plus className="w-4 h-4" />,
               onClick: () => setShowAddModal(true),
+            },
+            {
+              label: '添加文件夹',
+              icon: <FolderPlus className="w-4 h-4" />,
+              onClick: () => setShowAddFolderModal(true),
             },
             {
               label: '批量编辑',

@@ -11,7 +11,7 @@ export function usePublicShareState() {
   const [debouncedSearchKeyword, setDebouncedSearchKeyword] = useState('')
   const [searchMode, setSearchMode] = useState<'bookmark' | 'tag'>('bookmark')
   const [viewMode, setViewMode] = useState<ViewMode>('card')
-  const [sortBy, setSortBy] = useState<SortOption>('popular')
+  const [sortBy, setSortBy] = useState<SortOption>('created')
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all')
   const [tagLayout, setTagLayout] = useState<'grid' | 'masonry'>('grid')
   const [isTagSidebarOpen, setIsTagSidebarOpen] = useState(false)

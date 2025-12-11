@@ -47,7 +47,7 @@ export function useBookmarksState() {
   const [searchMode, setSearchMode] = useState<'bookmark' | 'tag'>('bookmark')
 
   // 排序和视图状态
-  const [sortBy, setSortBy] = useState<SortOption>('popular')
+  const [sortBy, setSortBy] = useState<SortOption>('created')
   const [viewMode, setViewMode] = useState<ViewMode>(() => getStoredViewMode() ?? 'card')
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all')
   const [tagLayout, setTagLayout] = useState<'grid' | 'masonry'>('grid')
