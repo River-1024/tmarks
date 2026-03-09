@@ -37,6 +37,23 @@ interface AIResultPayload {
   }>
 }
 
+interface PromptTemplateVars {
+  title: string
+  url: string
+  description: string
+  content: string
+  existingTags: string
+  recentBookmarks: string
+  maxTags: string
+}
+
+function renderPromptTemplate(template: string, vars: PromptTemplateVars): string {
+  return template.replace(
+    /\{(title|url|description|content|existingTags|recentBookmarks|maxTags)\}/g,
+    (_, key: keyof PromptTemplateVars) => vars[key] ?? ''
+  )
+}
+
 function extractJsonPayload(content: string): AIResultPayload {
   const trimmed = content.trim()
 
@@ -170,6 +187,22 @@ export function BatchAiRegenerateModal({
     setIsGenerating(true)
 
     try {
+      const templateVars: PromptTemplateVars = {
+        title: bookmarks[0]?.title || '',
+        url: bookmarks[0]?.url || '',
+        description: bookmarks[0]?.description || '',
+        content: bookmarks
+          .slice(0, 5)
+          .map((bookmark) => `${bookmark.title}\n${bookmark.description || ''}`.trim())
+          .join('\n\n'),
+        existingTags: existingTags.map((tag) => tag.name).join(', '),
+        recentBookmarks: bookmarks
+          .slice(0, 10)
+          .map((bookmark) => `- ${bookmark.title} [${bookmark.tags.map((tag) => tag.name).join(', ')}]`)
+          .join('\n'),
+        maxTags: '5',
+      }
+
       const prompt = `${t('batch.ai.prompt.intro')}
 
 ${bookmarks
@@ -187,7 +220,9 @@ ${t('batch.ai.prompt.rules')}`
         apiUrl: aiConfig.apiUrl,
         model: aiConfig.model,
         prompt,
-        systemPrompt: aiConfig.customPrompt,
+        systemPrompt: aiConfig.customPrompt
+          ? renderPromptTemplate(aiConfig.customPrompt, templateVars)
+          : undefined,
         temperature: 0.3,
         maxTokens: 2400,
       })

@@ -519,6 +519,9 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
               placeholder={t('ai.customPromptPlaceholder')}
               className="input w-full min-h-40 font-mono text-xs leading-relaxed"
             />
+            <p className="text-xs text-muted-foreground">
+              {t('ai.customPromptVariables')}
+            </p>
 
             <div className="p-3 rounded-lg border border-border bg-muted/20">
               <p className="text-xs font-medium text-foreground mb-2">{t('ai.customPromptExample')}</p>

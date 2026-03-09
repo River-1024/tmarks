@@ -549,6 +549,7 @@
     "customPromptTitle": "Custom TMarks Tag Prompt",
     "customPromptDesc": "Similar to extension settings, override default tag generation strategy",
     "customPromptPlaceholder": "Enter your custom prompt (used as system prompt)",
+    "customPromptVariables": "Available variables: {title}, {url}, {description}, {content}, {existingTags}, {recentBookmarks}, {maxTags}",
     "customPromptExample": "Prompt Example",
     "useExample": "Use Example",
     "copyExample": "Copy Example",

@@ -549,6 +549,7 @@
     "customPromptTitle": "自定义 TMarks 标签 Prompt",
     "customPromptDesc": "与扩展配置类似，可覆盖默认标签生成策略",
     "customPromptPlaceholder": "输入你的自定义 Prompt（作为系统提示词）",
+    "customPromptVariables": "可用变量：{title}、{url}、{description}、{content}、{existingTags}、{recentBookmarks}、{maxTags}",
     "customPromptExample": "示例 Prompt",
     "useExample": "使用示例",
     "copyExample": "复制示例",
