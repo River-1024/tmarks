@@ -15,7 +15,8 @@ import {
   AI_SERVICE_DOCS,
   AI_DEFAULT_MODELS,
   AI_AVAILABLE_MODELS,
-  AI_SERVICE_URLS
+  AI_SERVICE_URLS,
+  AI_TMARKS_CUSTOM_PROMPT_TEMPLATE
 } from '@/lib/ai/constants'
 import { canFetchModels, fetchAvailableModels } from '@/lib/ai/models'
 
@@ -44,6 +45,8 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
   const [apiUrl, setApiUrl] = useState('')
   const [model, setModel] = useState('')
   const [enabled, setEnabled] = useState(false)
+  const [enableCustomPrompt, setEnableCustomPrompt] = useState(false)
+  const [customPrompt, setCustomPrompt] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
 
@@ -68,6 +71,8 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
     setProvider(settings.provider)
     setModel(settings.model || AI_DEFAULT_MODELS[settings.provider])
     setEnabled(settings.enabled)
+    setEnableCustomPrompt(settings.enable_custom_prompt)
+    setCustomPrompt(settings.custom_prompt || '')
     setApiKey(settings.api_keys[settings.provider] || '')
     setApiUrl(settings.api_urls[settings.provider] || '')
     setHasChanges(false)
@@ -177,6 +182,8 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
         provider,
         model,
         enabled,
+        enable_custom_prompt: enableCustomPrompt,
+        custom_prompt: customPrompt,
         api_keys: { [provider]: normalizedApiKey }
       }
 
@@ -195,7 +202,7 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
       const message = error instanceof Error ? error.message : t('message.saveFailed')
       addToast('error', message)
     }
-  }, [addToast, apiKey, apiUrl, enabled, model, provider, settings, t, updateSettings])
+  }, [addToast, apiKey, apiUrl, customPrompt, enableCustomPrompt, enabled, model, provider, settings, t, updateSettings])
 
   const handleReset = useCallback(() => {
     applySettings()
@@ -477,6 +484,77 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
           </p>
         </div>
       )}
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="text-sm font-medium text-foreground">{t('ai.customPromptTitle')}</label>
+            <p className="text-xs text-muted-foreground mt-1">{t('ai.customPromptDesc')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEnableCustomPrompt(!enableCustomPrompt)
+              setHasChanges(true)
+            }}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+              enableCustomPrompt
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            {enableCustomPrompt ? t('ai.enabled') : t('ai.disabled')}
+          </button>
+        </div>
+
+        {enableCustomPrompt && (
+          <div className="space-y-3">
+            <textarea
+              value={customPrompt}
+              onChange={(e) => {
+                setCustomPrompt(e.target.value)
+                setHasChanges(true)
+              }}
+              rows={10}
+              placeholder={t('ai.customPromptPlaceholder')}
+              className="input w-full min-h-40 font-mono text-xs leading-relaxed"
+            />
+
+            <div className="p-3 rounded-lg border border-border bg-muted/20">
+              <p className="text-xs font-medium text-foreground mb-2">{t('ai.customPromptExample')}</p>
+              <pre className="text-xs text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto">
+                {AI_TMARKS_CUSTOM_PROMPT_TEMPLATE}
+              </pre>
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomPrompt(AI_TMARKS_CUSTOM_PROMPT_TEMPLATE)
+                    setHasChanges(true)
+                  }}
+                  className="btn btn-ghost btn-sm"
+                >
+                  {t('ai.useExample')}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(AI_TMARKS_CUSTOM_PROMPT_TEMPLATE)
+                      addToast('success', t('ai.copyExampleSuccess'))
+                    } catch {
+                      addToast('error', t('ai.copyExampleFailed'))
+                    }
+                  }}
+                  className="btn btn-ghost btn-sm"
+                >
+                  {t('ai.copyExample')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-3">
         <button
