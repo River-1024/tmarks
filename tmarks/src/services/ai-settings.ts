@@ -8,7 +8,7 @@ import type { AIProvider } from '@/lib/ai/constants'
 // AI 设置类型
 export interface AISettings {
   provider: AIProvider
-  api_keys: Record<string, string | null>
+  api_keys: Record<string, string>
   api_urls: Record<string, string>
   model: string | null
   custom_prompt: string | null

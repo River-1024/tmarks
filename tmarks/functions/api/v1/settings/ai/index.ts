@@ -16,6 +16,7 @@ interface AISettingsRow {
   id: string
   user_id: string
   provider: AIProvider
+  // 保留历史字段名，当前保存的是明文 JSON
   api_keys_encrypted: string | null
   api_urls: string | null
   model: string | null
@@ -40,81 +41,50 @@ interface UpdateAISettingsRequest {
 // 有效的服务商列表
 const VALID_PROVIDERS: AIProvider[] = ['openai', 'claude', 'deepseek', 'zhipu', 'modelscope', 'siliconflow', 'iflow', 'custom']
 
-/**
- * 简单的 API Key 加密（使用 AES-GCM）
- */
-async function encryptApiKeys(
-  apiKeys: Record<string, string>,
-  encryptionKey: string
-): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(JSON.stringify(apiKeys))
-  
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(encryptionKey.padEnd(32, '0').slice(0, 32)),
-    { name: 'AES-GCM' },
-    false,
-    ['encrypt']
-  )
-  
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    keyMaterial,
-    data
-  )
-  
-  const combined = new Uint8Array(iv.length + encrypted.byteLength)
-  combined.set(iv)
-  combined.set(new Uint8Array(encrypted), iv.length)
-  
-  return btoa(String.fromCharCode(...combined))
-}
+function parseStoredApiKeys(raw: string | null): Record<string, string> {
+  if (!raw) {
+    return {}
+  }
 
-/**
- * 解密 API Keys
- */
-async function decryptApiKeys(
-  encryptedData: string,
-  encryptionKey: string
-): Promise<Record<string, string>> {
   try {
-    const encoder = new TextEncoder()
-    const decoder = new TextDecoder()
-    
-    const combined = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0))
-    
-    const iv = combined.slice(0, 12)
-    const encrypted = combined.slice(12)
-    
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(encryptionKey.padEnd(32, '0').slice(0, 32)),
-      { name: 'AES-GCM' },
-      false,
-      ['decrypt']
-    )
-    
-    const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      keyMaterial,
-      encrypted
-    )
-    
-    return JSON.parse(decoder.decode(decrypted))
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {}
+    }
+
+    const result: Record<string, string> = {}
+    for (const [provider, key] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof key === 'string') {
+        result[provider] = key
+      }
+    }
+    return result
   } catch {
     return {}
   }
 }
 
-/**
- * 脱敏 API Key
- */
-function maskApiKey(key: string): string {
-  if (!key || key.length < 8) return '***'
-  return `${key.slice(0, 4)}...${key.slice(-4)}`
+function parseApiUrls(raw: string | null): Record<string, string> {
+  if (!raw) {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {}
+    }
+
+    const result: Record<string, string> = {}
+    for (const [provider, url] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof url === 'string') {
+        result[provider] = url
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
 }
 
 /**
@@ -138,8 +108,7 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
   async (context) => {
     try {
       const userId = context.data.user_id
-      const encryptionKey = context.env.ENCRYPTION_KEY || 'default-key-change-me'
-      
+
       const tableExists = await hasAISettingsTable(context.env.DB)
       if (!tableExists) {
         return success({
@@ -154,13 +123,13 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
           }
         })
       }
-      
+
       const settings = await context.env.DB.prepare(
         'SELECT * FROM ai_settings WHERE user_id = ?'
       )
         .bind(userId)
         .first<AISettingsRow>()
-      
+
       if (!settings) {
         return success({
           ai_settings: {
@@ -174,29 +143,12 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
           }
         })
       }
-      
-      let maskedApiKeys: Record<string, string | null> = {}
-      if (settings.api_keys_encrypted) {
-        const decrypted = await decryptApiKeys(settings.api_keys_encrypted, encryptionKey)
-        for (const [provider, key] of Object.entries(decrypted)) {
-          maskedApiKeys[provider] = key ? maskApiKey(key) : null
-        }
-      }
-      
-      let apiUrls: Record<string, string> = {}
-      if (settings.api_urls) {
-        try {
-          apiUrls = JSON.parse(settings.api_urls)
-        } catch {
-          apiUrls = {}
-        }
-      }
-      
+
       return success({
         ai_settings: {
           provider: settings.provider,
-          api_keys: maskedApiKeys,
-          api_urls: apiUrls,
+          api_keys: parseStoredApiKeys(settings.api_keys_encrypted),
+          api_urls: parseApiUrls(settings.api_urls),
           model: settings.model,
           custom_prompt: settings.custom_prompt,
           enable_custom_prompt: settings.enable_custom_prompt === 1,
@@ -216,70 +168,79 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
   async (context) => {
     try {
       const userId = context.data.user_id
-      const encryptionKey = context.env.ENCRYPTION_KEY || 'default-key-change-me'
       const body = await context.request.json() as UpdateAISettingsRequest
-      
+
       const tableExists = await hasAISettingsTable(context.env.DB)
       if (!tableExists) {
         return badRequest('AI settings feature not available. Please run database migrations.')
       }
-      
+
       if (body.provider && !VALID_PROVIDERS.includes(body.provider)) {
         return badRequest(`Invalid provider. Must be one of: ${VALID_PROVIDERS.join(', ')}`)
       }
-      
+
+      if (body.api_keys) {
+        for (const [provider, key] of Object.entries(body.api_keys)) {
+          if (!VALID_PROVIDERS.includes(provider as AIProvider)) {
+            return badRequest(`Invalid provider in api_keys: ${provider}`)
+          }
+          if (typeof key !== 'string') {
+            return badRequest(`Invalid API key for provider: ${provider}`)
+          }
+        }
+      }
+
+      if (body.api_urls) {
+        for (const [provider, url] of Object.entries(body.api_urls)) {
+          if (!VALID_PROVIDERS.includes(provider as AIProvider)) {
+            return badRequest(`Invalid provider in api_urls: ${provider}`)
+          }
+          if (typeof url !== 'string') {
+            return badRequest(`Invalid API URL for provider: ${provider}`)
+          }
+        }
+      }
+
       const existing = await context.env.DB.prepare(
         'SELECT * FROM ai_settings WHERE user_id = ?'
       )
         .bind(userId)
         .first<AISettingsRow>()
-      
+
       const now = new Date().toISOString()
-      
-      let apiKeysEncrypted: string | null = existing?.api_keys_encrypted || null
+
+      let apiKeysStored: string | null = existing?.api_keys_encrypted || null
       if (body.api_keys) {
-        let existingKeys: Record<string, string> = {}
-        if (existing?.api_keys_encrypted) {
-          existingKeys = await decryptApiKeys(existing.api_keys_encrypted, encryptionKey)
-        }
-        
+        const existingKeys = parseStoredApiKeys(existing?.api_keys_encrypted || null)
+
         for (const [provider, key] of Object.entries(body.api_keys)) {
-          if (key === null || key === '') {
+          const normalizedKey = key.trim()
+          if (normalizedKey === '') {
             delete existingKeys[provider]
           } else {
-            existingKeys[provider] = key
+            existingKeys[provider] = normalizedKey
           }
         }
-        
-        if (Object.keys(existingKeys).length > 0) {
-          apiKeysEncrypted = await encryptApiKeys(existingKeys, encryptionKey)
-        } else {
-          apiKeysEncrypted = null
-        }
+
+        apiKeysStored = Object.keys(existingKeys).length > 0 ? JSON.stringify(existingKeys) : null
       }
-      
+
       let apiUrlsJson: string | null = existing?.api_urls || null
       if (body.api_urls) {
-        let existingUrls: Record<string, string> = {}
-        if (existing?.api_urls) {
-          try {
-            existingUrls = JSON.parse(existing.api_urls)
-          } catch {
-            existingUrls = {}
-          }
-        }
-        
+        const existingUrls = parseApiUrls(existing?.api_urls || null)
+
         for (const [provider, url] of Object.entries(body.api_urls)) {
-          if (url === null || url === '') {
+          const normalizedUrl = url.trim()
+          if (!normalizedUrl) {
             delete existingUrls[provider]
           } else {
-            existingUrls[provider] = url
+            existingUrls[provider] = normalizedUrl
           }
         }
-        
+
         apiUrlsJson = Object.keys(existingUrls).length > 0 ? JSON.stringify(existingUrls) : null
       }
-      
+
       if (existing) {
         await context.env.DB.prepare(`
           UPDATE ai_settings SET
@@ -294,7 +255,7 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
           WHERE user_id = ?
         `).bind(
           body.provider ?? existing.provider,
-          apiKeysEncrypted,
+          apiKeysStored,
           apiUrlsJson,
           body.model !== undefined ? body.model : existing.model,
           body.custom_prompt !== undefined ? body.custom_prompt : existing.custom_prompt,
@@ -314,7 +275,7 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
           id,
           userId,
           body.provider ?? 'openai',
-          apiKeysEncrypted,
+          apiKeysStored,
           apiUrlsJson,
           body.model ?? null,
           body.custom_prompt ?? null,
@@ -324,7 +285,7 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
           now
         ).run()
       }
-      
+
       return success({
         message: 'AI settings updated successfully'
       })

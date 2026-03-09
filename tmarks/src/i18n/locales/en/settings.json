@@ -533,6 +533,7 @@
     "apiKey": "API Key",
     "getApiKey": "Get API Key",
     "apiKeyPlaceholder": "Enter {{provider}} API Key",
+    "apiKeySavedHint": "Saved API Key: {{key}}. Enter a new key and save to replace it.",
     "model": "Model",
     "selectModel": "Select",
     "refreshModels": "Refresh Models",
@@ -551,7 +552,7 @@
     "saveSuccess": "AI settings saved",
     "infoBox": {
       "title": "Usage Guide",
-      "tip1": "API Key is encrypted and stored on server, will not be leaked",
+      "tip1": "API Key is stored in plain text and shown in settings, use only in trusted environments",
       "tip2": "AI calls are made directly from browser, data doesn't pass through TMarks server",
       "tip3": "Recommended: DeepSeek or gpt-4o-mini for best value",
       "tip4": "Processing 100 bookmarks costs about $0.01-0.05"

@@ -533,6 +533,7 @@
     "apiKey": "API Key",
     "getApiKey": "获取 API Key",
     "apiKeyPlaceholder": "输入 {{provider}} API Key",
+    "apiKeySavedHint": "当前已保存的 API Key：{{key}}。输入新的 Key 并保存后将覆盖旧值。",
     "model": "模型",
     "selectModel": "选择",
     "refreshModels": "刷新模型",
@@ -551,7 +552,7 @@
     "saveSuccess": "AI 设置已保存",
     "infoBox": {
       "title": "使用说明",
-      "tip1": "API Key 会加密存储在服务器，不会泄露",
+      "tip1": "API Key 会以明文保存并在设置页回显，请仅在可信环境使用",
       "tip2": "AI 调用直接从浏览器发起，数据不经过 TMarks 服务器",
       "tip3": "推荐使用 DeepSeek 或 gpt-4o-mini，性价比高",
       "tip4": "处理 100 个书签约消耗 0.01-0.05 美元"

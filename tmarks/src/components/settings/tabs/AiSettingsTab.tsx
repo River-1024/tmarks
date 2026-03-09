@@ -21,7 +21,18 @@ import { canFetchModels, fetchAvailableModels } from '@/lib/ai/models'
 
 const PROVIDERS: AIProvider[] = ['openai', 'claude', 'deepseek', 'zhipu', 'siliconflow', 'custom']
 
-export function AiSettingsTab() {
+interface AiSettingsTabActions {
+  save: () => Promise<void>
+  reset: () => void
+  hasChanges: boolean
+  isSaving: boolean
+}
+
+interface AiSettingsTabProps {
+  onRegisterActions?: (actions: AiSettingsTabActions | null) => void
+}
+
+export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
   const { t } = useTranslation('settings')
   const { data: settings, isLoading } = useAiSettings()
   const updateSettings = useUpdateAiSettings()
@@ -49,6 +60,24 @@ export function AiSettingsTab() {
   const lastFetchSignature = useRef<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  const applySettings = useCallback(() => {
+    if (!settings) {
+      return
+    }
+
+    setProvider(settings.provider)
+    setModel(settings.model || AI_DEFAULT_MODELS[settings.provider])
+    setEnabled(settings.enabled)
+    setApiKey(settings.api_keys[settings.provider] || '')
+    setApiUrl(settings.api_urls[settings.provider] || '')
+    setHasChanges(false)
+    setTestResult(null)
+    setFetchedModels([])
+    setModelFetchError(null)
+    setShowModelDropdown(false)
+    lastFetchSignature.current = null
+  }, [settings])
+
   useEffect(() => {
     if (!showModelDropdown) return
     const handleClickOutside = (event: MouseEvent) => {
@@ -61,14 +90,8 @@ export function AiSettingsTab() {
   }, [showModelDropdown])
 
   useEffect(() => {
-    if (settings) {
-      setProvider(settings.provider)
-      setModel(settings.model || AI_DEFAULT_MODELS[settings.provider])
-      setEnabled(settings.enabled)
-      setApiKey(settings.api_keys[settings.provider] || '')
-      setApiUrl(settings.api_urls[settings.provider] || '')
-    }
-  }, [settings])
+    applySettings()
+  }, [applySettings])
 
   const handleProviderChange = (newProvider: AIProvider) => {
     setProvider(newProvider)
@@ -86,7 +109,7 @@ export function AiSettingsTab() {
     const trimmedKey = apiKey.trim()
     const supported = canFetchModels(provider, apiUrl)
     
-    if (!supported || !trimmedKey || trimmedKey.includes('...')) {
+    if (!supported || !trimmedKey) {
       return
     }
 
@@ -118,7 +141,7 @@ export function AiSettingsTab() {
 
   useEffect(() => {
     const trimmedKey = apiKey.trim()
-    if (!trimmedKey || trimmedKey.includes('...')) {
+    if (!trimmedKey) {
       return
     }
 
@@ -147,33 +170,55 @@ export function AiSettingsTab() {
     ? fetchedModels 
     : AI_AVAILABLE_MODELS[provider]
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     try {
+      const normalizedApiKey = apiKey.trim()
       const updateData: Record<string, unknown> = {
         provider,
         model,
-        enabled
+        enabled,
+        api_keys: { [provider]: normalizedApiKey }
       }
 
-      if (apiKey && !apiKey.includes('...')) {
-        updateData.api_keys = { [provider]: apiKey }
-      }
-
-      if (apiUrl) {
-        updateData.api_urls = { [provider]: apiUrl }
+      if (apiUrl.trim()) {
+        updateData.api_urls = { [provider]: apiUrl.trim() }
+      } else if ((settings?.api_urls[provider] || '').trim()) {
+        // 显式清空该 provider 的自定义地址
+        updateData.api_urls = { [provider]: '' }
       }
 
       await updateSettings.mutateAsync(updateData)
       addToast('success', t('ai.saveSuccess'))
+      setApiKey(normalizedApiKey)
       setHasChanges(false)
     } catch (error) {
       const message = error instanceof Error ? error.message : t('message.saveFailed')
       addToast('error', message)
     }
-  }
+  }, [addToast, apiKey, apiUrl, enabled, model, provider, settings, t, updateSettings])
+
+  const handleReset = useCallback(() => {
+    applySettings()
+    addToast('info', t('message.resetSuccess'))
+  }, [addToast, applySettings, t])
+
+  useEffect(() => {
+    if (!onRegisterActions) {
+      return
+    }
+
+    onRegisterActions({
+      save: handleSave,
+      reset: handleReset,
+      hasChanges,
+      isSaving: updateSettings.isPending,
+    })
+
+    return () => onRegisterActions(null)
+  }, [handleReset, handleSave, hasChanges, onRegisterActions, updateSettings.isPending])
 
   const handleTest = async () => {
-    if (!apiKey || apiKey.includes('...')) {
+    if (!apiKey.trim()) {
       addToast('error', t('ai.enterApiKeyFirst'))
       return
     }
@@ -307,6 +352,7 @@ export function AiSettingsTab() {
               setApiKey(e.target.value)
               setHasChanges(true)
               setTestResult(null)
+              lastFetchSignature.current = null
             }}
             placeholder={t('ai.apiKeyPlaceholder', { provider: AI_PROVIDER_NAMES[provider] })}
             className="input w-full pl-10 pr-10"
@@ -328,9 +374,9 @@ export function AiSettingsTab() {
             <button
               type="button"
               onClick={handleRefreshModels}
-              disabled={isFetchingModels || !apiKey.trim() || apiKey.includes('...')}
+              disabled={isFetchingModels || !apiKey.trim()}
               className={`text-xs px-2 py-1 rounded flex items-center gap-1 transition-colors ${
-                isFetchingModels || !apiKey.trim() || apiKey.includes('...')
+                isFetchingModels || !apiKey.trim()
                   ? 'bg-muted text-muted-foreground cursor-not-allowed'
                   : 'bg-primary text-primary-foreground hover:bg-primary/90'
               }`}
@@ -435,7 +481,7 @@ export function AiSettingsTab() {
       <div className="flex items-center gap-3">
         <button
           onClick={handleTest}
-          disabled={testConnection.isPending || !apiKey}
+          disabled={testConnection.isPending || !apiKey.trim()}
           className="btn btn-ghost flex items-center gap-2"
         >
           {testConnection.isPending ? (

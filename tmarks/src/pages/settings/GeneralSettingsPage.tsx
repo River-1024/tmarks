@@ -1,7 +1,20 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Save, RotateCcw, Settings, Zap, Chrome, Key, Database, LogOut, BarChart3, Camera, Share2 } from 'lucide-react'
+import {
+  BarChart3,
+  Bot,
+  Camera,
+  Chrome,
+  Database,
+  Key,
+  LogOut,
+  RotateCcw,
+  Save,
+  Settings,
+  Share2,
+  Zap,
+} from 'lucide-react'
 import { usePreferences, useUpdatePreferences } from '@/hooks/usePreferences'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
@@ -10,30 +23,82 @@ import { ApiError } from '@/lib/api-client'
 import { SettingsTabs } from '@/components/settings/SettingsTabs'
 import { BasicSettingsTab } from '@/components/settings/tabs/BasicSettingsTab'
 import { AutomationSettingsTab } from '@/components/settings/tabs/AutomationSettingsTab'
-
+import { SnapshotSettingsTab } from '@/components/settings/tabs/SnapshotSettingsTab'
+import { AiSettingsTab } from '@/components/settings/tabs/AiSettingsTab'
 import { BrowserSettingsTab } from '@/components/settings/tabs/BrowserSettingsTab'
 import { ApiSettingsTab } from '@/components/settings/tabs/ApiSettingsTab'
 import { ShareSettingsTab } from '@/components/settings/tabs/ShareSettingsTab'
 import { DataSettingsTab } from '@/components/settings/tabs/DataSettingsTab'
 import { BookmarkStatisticsPage } from '@/pages/bookmarks/BookmarkStatisticsPage'
-import { SnapshotSettingsTab } from '@/components/settings/tabs/SnapshotSettingsTab'
+
+const TAB_IDS = [
+  'basic',
+  'automation',
+  'snapshot',
+  'ai',
+  'browser',
+  'api',
+  'share',
+  'data',
+  'statistics',
+] as const
+
+type TabId = (typeof TAB_IDS)[number]
+
+interface TabActions {
+  save: () => Promise<void>
+  reset: () => void
+  hasChanges: boolean
+  isSaving: boolean
+}
+
+function isValidTab(tab: string | null): tab is TabId {
+  return Boolean(tab && TAB_IDS.includes(tab as TabId))
+}
 
 export function GeneralSettingsPage() {
   const { t } = useTranslation('settings')
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: preferences, isLoading } = usePreferences()
   const updatePreferences = useUpdatePreferences()
   const { user, logout } = useAuthStore()
   const { addToast } = useToastStore()
 
-  const [activeTab, setActiveTab] = useState('basic')
+  const initialTab: TabId = isValidTab(searchParams.get('tab'))
+    ? (searchParams.get('tab') as TabId)
+    : 'basic'
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab)
   const [localPreferences, setLocalPreferences] = useState<UserPreferences | null>(null)
+  const [tabActions, setTabActions] = useState<TabActions | null>(null)
 
   useEffect(() => {
     if (preferences) {
       setLocalPreferences(preferences)
     }
   }, [preferences])
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (isValidTab(tab) && tab !== activeTab) {
+      setActiveTab(tab)
+    }
+  }, [searchParams, activeTab])
+
+  useEffect(() => {
+    if (activeTab !== 'ai') {
+      setTabActions(null)
+    }
+  }, [activeTab])
+
+  const handleTabChange = (tabId: string) => {
+    if (!isValidTab(tabId)) return
+
+    setActiveTab(tabId)
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.set('tab', tabId)
+    setSearchParams(nextParams, { replace: true })
+  }
 
   const handleUpdate = (updates: Partial<UserPreferences>) => {
     if (localPreferences) {
@@ -42,6 +107,16 @@ export function GeneralSettingsPage() {
   }
 
   const handleSave = async () => {
+    if (activeTab === 'ai') {
+      if (!tabActions) {
+        addToast('error', t('message.saveFailed'))
+        return
+      }
+
+      await tabActions.save()
+      return
+    }
+
     if (!localPreferences) return
 
     try {
@@ -72,6 +147,15 @@ export function GeneralSettingsPage() {
   }
 
   const handleReset = () => {
+    if (activeTab === 'ai') {
+      if (!tabActions) {
+        return
+      }
+
+      tabActions.reset()
+      return
+    }
+
     if (preferences) {
       setLocalPreferences(preferences)
       addToast('info', t('message.resetSuccess'))
@@ -87,6 +171,21 @@ export function GeneralSettingsPage() {
     }
   }
 
+  const tabs = useMemo(
+    () => [
+      { id: 'basic', label: t('tabs.basic'), icon: <Settings className="w-4 h-4" /> },
+      { id: 'automation', label: t('tabs.automation'), icon: <Zap className="w-4 h-4" /> },
+      { id: 'snapshot', label: t('tabs.snapshot'), icon: <Camera className="w-4 h-4" /> },
+      { id: 'ai', label: t('tabs.ai'), icon: <Bot className="w-4 h-4" /> },
+      { id: 'browser', label: t('tabs.browser'), icon: <Chrome className="w-4 h-4" /> },
+      { id: 'api', label: t('tabs.api'), icon: <Key className="w-4 h-4" /> },
+      { id: 'share', label: t('tabs.share'), icon: <Share2 className="w-4 h-4" /> },
+      { id: 'data', label: t('tabs.data'), icon: <Database className="w-4 h-4" /> },
+      { id: 'statistics', label: t('tabs.statistics'), icon: <BarChart3 className="w-4 h-4" /> },
+    ],
+    [t]
+  )
+
   if (isLoading || !localPreferences) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -95,21 +194,14 @@ export function GeneralSettingsPage() {
     )
   }
 
-  const tabs = [
-    { id: 'basic', label: t('tabs.basic'), icon: <Settings className="w-4 h-4" /> },
-    { id: 'automation', label: t('tabs.automation'), icon: <Zap className="w-4 h-4" /> },
-
-    { id: 'snapshot', label: t('tabs.snapshot'), icon: <Camera className="w-4 h-4" /> },
-    { id: 'browser', label: t('tabs.browser'), icon: <Chrome className="w-4 h-4" /> },
-    { id: 'api', label: t('tabs.api'), icon: <Key className="w-4 h-4" /> },
-    { id: 'share', label: t('tabs.share'), icon: <Share2 className="w-4 h-4" /> },
-    { id: 'data', label: t('tabs.data'), icon: <Database className="w-4 h-4" /> },
-    { id: 'statistics', label: t('tabs.statistics'), icon: <BarChart3 className="w-4 h-4" /> },
-  ]
+  const isAiTab = activeTab === 'ai'
+  const saveDisabled = isAiTab
+    ? (!tabActions || !tabActions.hasChanges || tabActions.isSaving)
+    : updatePreferences.isPending
+  const savePending = isAiTab ? Boolean(tabActions?.isSaving) : updatePreferences.isPending
 
   return (
     <div className="w-[80%] mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
-      {/* 页面标题卡片 */}
       <div className="card p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">
@@ -120,6 +212,7 @@ export function GeneralSettingsPage() {
               {t('description')}
             </p>
           </div>
+
           <div className="flex gap-2 flex-shrink-0">
             <button
               onClick={handleLogout}
@@ -138,20 +231,21 @@ export function GeneralSettingsPage() {
             </button>
             <button
               onClick={handleSave}
-              disabled={updatePreferences.isPending}
+              disabled={saveDisabled}
               className="btn btn-ghost btn-sm sm:btn flex items-center gap-2 hover:bg-muted/30"
             >
               <Save className="w-4 h-4" />
-              <span className="hidden sm:inline">{updatePreferences.isPending ? t('action.saving') : t('action.save')}</span>
+              <span className="hidden sm:inline">
+                {savePending ? t('action.saving') : t('action.save')}
+              </span>
               <span className="sm:hidden">{t('action.save').split(' ')[0]}</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* 标签页容器卡片 */}
       <div className="card p-3 sm:p-6">
-        <SettingsTabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
+        <SettingsTabs tabs={tabs} activeTab={activeTab} onTabChange={handleTabChange}>
           {activeTab === 'basic' && <BasicSettingsTab />}
 
           {activeTab === 'automation' && (
@@ -167,8 +261,6 @@ export function GeneralSettingsPage() {
             />
           )}
 
-
-
           {activeTab === 'snapshot' && (
             <SnapshotSettingsTab
               retentionCount={localPreferences.snapshot_retention_count}
@@ -181,6 +273,8 @@ export function GeneralSettingsPage() {
               onAutoCleanupDaysChange={(days) => handleUpdate({ snapshot_auto_cleanup_days: days })}
             />
           )}
+
+          {activeTab === 'ai' && <AiSettingsTab onRegisterActions={setTabActions} />}
 
           {activeTab === 'browser' && <BrowserSettingsTab />}
 
