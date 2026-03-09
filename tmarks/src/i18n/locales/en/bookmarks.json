@@ -91,6 +91,43 @@
     "removeTags": "Remove",
     "addTagsSuccess": "Successfully added tags to {{count}} bookmarks",
     "removeTagsSuccess": "Successfully removed tags from {{count}} bookmarks",
+    "ai": {
+      "button": "AI Regenerate",
+      "title": "AI Regenerate Tags",
+      "description": "Generate smart tags for {{count}} selected bookmarks",
+      "selectedSummary": "Selected {{count}} bookmarks. AI will analyze the current title, URL, description and existing tags.",
+      "loadingSettings": "Loading AI settings...",
+      "overwriteHint": "After applying, the selected bookmarks' existing tags will be replaced by the generated tags.",
+      "generatingTitle": "AI is organizing tags",
+      "generatingDescription": "Generating smart classification tags for the selected bookmarks...",
+      "tagsLabel": "Tags",
+      "tagsPlaceholder": "Enter tags separated by commas",
+      "footer": "Ready to process {{count}} bookmarks",
+      "start": "Start AI organize",
+      "regenerate": "Regenerate",
+      "apply": "Apply to system",
+      "applying": "Applying...",
+      "done": "Done",
+      "applySuccess": "AI tags applied to {{count}} bookmarks",
+      "completedTitle": "Completed import",
+      "completedDescription": "The AI-generated tags have been imported into the system for {{count}} bookmarks.",
+      "steps": {
+        "select": "Select bookmarks",
+        "generate": "Smart tag grouping",
+        "review": "Review and edit",
+        "complete": "Complete import"
+      },
+      "prompt": {
+        "intro": "Please generate concise Chinese tags for each bookmark below. Return JSON only, in the format {\"items\":[{\"bookmark_id\":\"...\",\"tags\":[\"tag1\",\"tag2\"]}]}",
+        "rules": "Rules: 1) Return 2-5 tags for each bookmark. 2) Tags should focus on topic, usage and category. 3) Avoid overly broad tags like 'website' or 'bookmark'. 4) Keep tags short and reusable."
+      },
+      "errors": {
+        "notConfigured": "AI is not configured or enabled yet. Please complete AI settings first.",
+        "generateFailed": "AI generation failed, please try again.",
+        "applyFailed": "Failed to apply AI tags, please try again.",
+        "createTagFailed": "Failed to create tag \"{{name}}\""
+      }
+    },
     "cancel": "Cancel",
     "confirmAction": "Confirm Action",
     "confirmMessage": "Are you sure you want to perform this action?",

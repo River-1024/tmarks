@@ -387,6 +387,7 @@ export function BookmarksPage() {
         {batchMode && selectedIds.length > 0 && (
           <BatchActionBar
             selectedIds={selectedIds}
+            bookmarks={filteredBookmarks}
             onClearSelection={handleClearSelection}
             onSuccess={handleBatchSuccess}
           />

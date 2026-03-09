@@ -95,7 +95,44 @@
     "confirmAction": "确认操作",
     "confirmMessage": "确定要执行此操作吗?",
     "select": "选择",
-    "deselect": "取消选择"
+    "deselect": "取消选择",
+    "ai": {
+      "button": "AI重新生成",
+      "title": "AI 重新生成标签",
+      "description": "为已选择的 {{count}} 个书签生成智能标签",
+      "selectedSummary": "已选择 {{count}} 个书签，AI 会结合标题、URL、描述和现有标签进行分析。",
+      "loadingSettings": "正在加载 AI 设置...",
+      "overwriteHint": "确认应用后，将用新生成的标签覆盖所选书签当前的标签。",
+      "generatingTitle": "AI 正在整理标签",
+      "generatingDescription": "正在为所选书签生成智能分类标签...",
+      "tagsLabel": "标签",
+      "tagsPlaceholder": "请输入标签，使用逗号分隔",
+      "footer": "准备处理 {{count}} 个书签",
+      "start": "开始 AI 整理",
+      "regenerate": "重新生成",
+      "apply": "导入到系统",
+      "applying": "导入中...",
+      "done": "完成",
+      "applySuccess": "已为 {{count}} 个书签应用 AI 标签",
+      "completedTitle": "完成导入",
+      "completedDescription": "AI 生成的标签已导入系统，共处理 {{count}} 个书签。",
+      "steps": {
+        "select": "选择书签",
+        "generate": "智能分类标签",
+        "review": "编辑确认",
+        "complete": "完成导入"
+      },
+      "prompt": {
+        "intro": "请为下面每个书签生成简洁、可复用的中文标签。只返回 JSON，格式为 {\"items\":[{\"bookmark_id\":\"...\",\"tags\":[\"标签1\",\"标签2\"]}]}",
+        "rules": "规则：1）每个书签返回 2-5 个标签；2）重点体现主题、用途和分类；3）避免“网站”“书签”这类过于宽泛的词；4）标签尽量短、利于复用。"
+      },
+      "errors": {
+        "notConfigured": "AI 尚未启用或未完成配置，请先在设置中完成 AI 配置。",
+        "generateFailed": "AI 生成失败，请重试。",
+        "applyFailed": "应用 AI 标签失败，请重试。",
+        "createTagFailed": "创建标签“{{name}}”失败"
+      }
+    }
   },
   "action": {
     "success": "操作成功",

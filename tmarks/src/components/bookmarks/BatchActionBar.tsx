@@ -1,20 +1,23 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { BatchActionType } from '@/lib/types'
+import type { BatchActionType, Bookmark } from '@/lib/types'
 import { useBatchAction } from '@/hooks/useBookmarks'
 import { useTags } from '@/hooks/useTags'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { AlertDialog } from '@/components/common/AlertDialog'
 import { Z_INDEX } from '@/lib/constants/z-index'
+import { BatchAiRegenerateModal } from './BatchAiRegenerateModal'
 
 interface BatchActionBarProps {
   selectedIds: string[]
+  bookmarks: Bookmark[]
   onClearSelection: () => void
   onSuccess?: () => void
 }
 
 export function BatchActionBar({
   selectedIds,
+  bookmarks,
   onClearSelection,
   onSuccess,
 }: BatchActionBarProps) {
@@ -25,12 +28,17 @@ export function BatchActionBar({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [showErrorAlert, setShowErrorAlert] = useState(false)
   const [showSuccessAlert, setShowSuccessAlert] = useState(false)
+  const [showAiModal, setShowAiModal] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const [pendingAction, setPendingAction] = useState<BatchActionType | null>(null)
   const batchAction = useBatchAction()
   const { data: tagsData } = useTags({ sort: 'name' })
 
   const tags = tagsData?.tags || []
+  const selectedBookmarks = useMemo(
+    () => bookmarks.filter((bookmark) => selectedIds.includes(bookmark.id)),
+    [bookmarks, selectedIds]
+  )
 
   const handleAction = async (action: BatchActionType) => {
     if (selectedIds.length === 0) return
@@ -231,6 +239,15 @@ export function BatchActionBar({
             </div>
 
             <button
+              onClick={() => setShowAiModal(true)}
+              className="btn btn-sm bg-primary-content/10 hover:bg-primary-content/20 border-none text-primary-content"
+              disabled={batchAction.isPending || selectedBookmarks.length === 0}
+              title={t('batch.ai.button')}
+            >
+              {t('batch.ai.button')}
+            </button>
+
+            <button
               onClick={() => handleAction('delete')}
               className="btn btn-sm bg-error/10 hover:bg-error/20 border-none text-primary-content"
               disabled={batchAction.isPending}
@@ -277,6 +294,17 @@ export function BatchActionBar({
         message={t('action.failed')}
         type="error"
         onConfirm={() => setShowErrorAlert(false)}
+      />
+
+      <BatchAiRegenerateModal
+        isOpen={showAiModal}
+        bookmarks={selectedBookmarks}
+        onClose={() => setShowAiModal(false)}
+        onSuccess={() => {
+          setShowAiModal(false)
+          onClearSelection()
+          onSuccess?.()
+        }}
       />
     </div>
   )
