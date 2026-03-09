@@ -1,16 +1,15 @@
 import { apiClient } from '@/lib/api-client'
 import type {
-  Tag,
-  TagsResponse,
+  BatchDeleteTagsRequest,
+  BatchDeleteTagsResponse,
   CreateTagRequest,
-  UpdateTagRequest,
+  Tag,
   TagQueryParams,
+  TagsResponse,
+  UpdateTagRequest,
 } from '@/lib/types'
 
 export const tagsService = {
-  /**
-   * 获取标签列表
-   */
   async getTags(params?: TagQueryParams) {
     const searchParams = new URLSearchParams()
 
@@ -23,32 +22,26 @@ export const tagsService = {
     return response.data!
   },
 
-  /**
-   * 创建标签
-   */
   async createTag(data: CreateTagRequest) {
     const response = await apiClient.post<{ tag: Tag }>('/tags', data)
     return response.data!.tag
   },
 
-  /**
-   * 更新标签
-   */
   async updateTag(id: string, data: UpdateTagRequest) {
     const response = await apiClient.patch<{ tag: Tag }>(`/tags/${id}`, data)
     return response.data!.tag
   },
 
-  /**
-   * 删除标签
-   */
   async deleteTag(id: string) {
     await apiClient.delete(`/tags/${id}`)
   },
 
-  /**
-   * 增加标签点击计数
-   */
+  async deleteTags(ids: string[]) {
+    const payload: BatchDeleteTagsRequest = { tag_ids: ids }
+    const response = await apiClient.post<BatchDeleteTagsResponse>('/tags/bulk-delete', payload)
+    return response.data!
+  },
+
   async incrementClick(id: string) {
     await apiClient.patch(`/tags/${id}/click`, {})
   },

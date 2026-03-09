@@ -30,6 +30,8 @@
     "edit": "Edit tag",
     "delete": "Delete tag",
     "deleting": "Deleting...",
+    "batchDelete": "Batch delete",
+    "batchDeleting": "Deleting...",
     "save": "Save",
     "saving": "Saving...",
     "done": "Done"
@@ -46,17 +48,24 @@
     "noTags": "No tags yet",
     "noTagsHint": "Click + button to create your first tag",
     "bookmarkCount": "{{count}} bookmarks",
-    "noBookmarks": "No bookmarks"
+    "noBookmarks": "No bookmarks",
+    "selectAll": "Select all",
+    "clearSelection": "Clear selection",
+    "selectedCount": "Selected {{count}} tags"
   },
   "confirm": {
     "deleteTitle": "Delete Tag",
-    "deleteMessage": "Are you sure you want to delete tag \"{{name}}\"? Associated bookmarks will not be deleted."
+    "deleteMessage": "Are you sure you want to delete tag \"{{name}}\"? Associated bookmarks will not be deleted.",
+    "batchDeleteTitle": "Batch Delete Tags",
+    "batchDeleteMessage": "Are you sure you want to delete {{count}} selected tags? Associated bookmarks will not be deleted."
   },
   "message": {
     "updateSuccess": "Tag updated successfully",
     "updateFailed": "Update failed, please try again",
     "deleteSuccess": "Tag deleted successfully",
-    "deleteFailed": "Delete failed, please try again"
+    "deleteFailed": "Delete failed, please try again",
+    "batchDeleteSuccess": "Deleted {{count}} tags successfully",
+    "batchDeleteFailed": "Batch delete failed, please try again"
   },
   "status": {
     "loading": "Loading..."

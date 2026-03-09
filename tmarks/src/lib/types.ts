@@ -320,6 +320,15 @@ export interface BatchActionResponse {
 }
 
 // 标签页组类型
+export interface BatchDeleteTagsRequest {
+  tag_ids: string[]
+}
+
+export interface BatchDeleteTagsResponse {
+  success: boolean
+  affected_count: number
+}
+
 export interface TabGroup {
   id: string
   user_id: string

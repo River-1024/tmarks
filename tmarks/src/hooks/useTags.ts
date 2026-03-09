@@ -65,3 +65,15 @@ export function useDeleteTag() {
     },
   })
 }
+
+export function useDeleteTags() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (ids: string[]) => tagsService.deleteTags(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [TAGS_QUERY_KEY] })
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] })
+    },
+  })
+}

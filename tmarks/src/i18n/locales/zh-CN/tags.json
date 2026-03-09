@@ -11,13 +11,13 @@
     "readOnly": "发布者尚未公开任何标签"
   },
   "sort": {
-    "byUsage": "按书签数排序 (点击切换到按热度)",
-    "byClicks": "按热度排序 (点击切换到按名称)",
-    "byName": "按名称排序 (点击切换到按书签数)"
+    "byUsage": "按书签数排序（点击切换到按热度）",
+    "byClicks": "按热度排序（点击切换到按名称）",
+    "byName": "按名称排序（点击切换到按书签数）"
   },
   "layout": {
-    "grid": "网格布局 (点击切换到瀑布流)",
-    "masonry": "瀑布流布局 (点击切换到网格)"
+    "grid": "网格布局（点击切换到瀑布流）",
+    "masonry": "瀑布流布局（点击切换到网格）"
   },
   "selection": {
     "clear": "清空选中",
@@ -30,6 +30,8 @@
     "edit": "编辑标签",
     "delete": "删除标签",
     "deleting": "删除中...",
+    "batchDelete": "批量删除",
+    "batchDeleting": "删除中...",
     "save": "保存",
     "saving": "保存中...",
     "done": "完成"
@@ -46,17 +48,24 @@
     "noTags": "暂无标签",
     "noTagsHint": "点击 + 按钮创建第一个标签",
     "bookmarkCount": "{{count}} 个关联书签",
-    "noBookmarks": "暂无关联书签"
+    "noBookmarks": "暂无关联书签",
+    "selectAll": "全选",
+    "clearSelection": "清空选择",
+    "selectedCount": "已选择 {{count}} 个标签"
   },
   "confirm": {
     "deleteTitle": "删除标签",
-    "deleteMessage": "确定要删除标签\"{{name}}\"吗？关联的书签不会被删除。"
+    "deleteMessage": "确定要删除标签“{{name}}”吗？关联的书签不会被删除。",
+    "batchDeleteTitle": "批量删除标签",
+    "batchDeleteMessage": "确定要删除已选择的 {{count}} 个标签吗？关联的书签不会被删除。"
   },
   "message": {
     "updateSuccess": "标签已成功更新",
     "updateFailed": "更新失败，请重试",
     "deleteSuccess": "标签已成功删除",
-    "deleteFailed": "删除失败，请重试"
+    "deleteFailed": "删除失败，请重试",
+    "batchDeleteSuccess": "已成功删除 {{count}} 个标签",
+    "batchDeleteFailed": "批量删除失败，请重试"
   },
   "status": {
     "loading": "加载中..."
