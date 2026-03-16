@@ -382,6 +382,7 @@
       "columnsSupported": "DB supports log config columns",
       "preferencesFound": "Log preferences loaded",
       "loggingEnabled": "Effective logging enabled",
+      "apiVersion": "Logs API version",
       "retentionDays": "Active retention days",
       "maxEntries": "Active max entries",
       "latestLog": "Latest log",

@@ -473,6 +473,7 @@ export interface OperationLogEntry {
 export interface OperationLogsResponse {
   logs: OperationLogEntry[]
   total: number
+  api_version?: string
   debug?: {
     operation_log_columns_supported: boolean
     preferences_found: boolean

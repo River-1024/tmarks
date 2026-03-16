@@ -8,6 +8,7 @@ import { useToastStore } from '@/stores/toastStore'
 import type { UserPreferences } from '@/lib/types'
 import { SettingsSection, SettingsItem, SettingsDivider } from '../SettingsSection'
 import { InfoBox } from '../InfoBox'
+import { ApiError } from '@/lib/api-client'
 
 interface LogsSettingsTabProps {
   preferences: UserPreferences
@@ -39,7 +40,11 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
       setLastDebugError(null)
       addToast('success', t('logs.debug.writeSuccess'))
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('logs.debug.writeFailed')
+      const message = err instanceof ApiError
+        ? `${err.message} (status=${err.status}, code=${err.code})`
+        : err instanceof Error
+          ? err.message
+          : t('logs.debug.writeFailed')
       setLastDebugError(message)
       addToast('error', `${t('logs.debug.writeFailed')}: ${message}`)
     }
@@ -130,6 +135,7 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
             <DebugItem label={t('logs.debug.columnsSupported')} value={String(data?.debug?.operation_log_columns_supported ?? false)} />
             <DebugItem label={t('logs.debug.preferencesFound')} value={String(data?.debug?.preferences_found ?? false)} />
             <DebugItem label={t('logs.debug.loggingEnabled')} value={String(data?.debug?.effective_logging_enabled ?? false)} />
+            <DebugItem label={t('logs.debug.apiVersion')} value={data?.api_version || '-'} />
             <DebugItem label={t('logs.debug.retentionDays')} value={String(data?.debug?.retention_days ?? '-')} />
             <DebugItem label={t('logs.debug.maxEntries')} value={String(data?.debug?.max_entries ?? '-')} />
             <DebugItem

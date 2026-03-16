@@ -382,6 +382,7 @@
       "columnsSupported": "数据库已支持日志配置列",
       "preferencesFound": "已读取到日志配置",
       "loggingEnabled": "当前有效日志开关",
+      "apiVersion": "日志接口版本",
       "retentionDays": "当前保留天数",
       "maxEntries": "当前最大数量",
       "latestLog": "最近一条日志",
