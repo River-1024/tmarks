@@ -19,6 +19,7 @@ const requiredTables = [
   'tags',
   'bookmark_tags',
   'user_preferences',
+  'audit_logs',
   'bookmark_snapshots',
   'bookmark_images',
   'api_keys',
@@ -65,6 +66,9 @@ const requiredPreferenceFields = [
   'snapshot_auto_create',
   'snapshot_auto_dedupe',
   'snapshot_auto_cleanup_days',
+  'enable_operation_logging',
+  'operation_log_retention_days',
+  'operation_log_max_entries',
   'updated_at',
 ];
 
