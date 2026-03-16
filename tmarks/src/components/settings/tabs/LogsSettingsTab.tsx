@@ -19,8 +19,9 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
   const { addToast } = useToastStore()
   const clearLogs = useClearOperationLogs()
   const writeDebugLog = useWriteOperationDebugLog()
-  const { data, isLoading, refetch, isRefetching } = useOperationLogs(50)
+  const { data, isLoading, refetch, isRefetching, error } = useOperationLogs(50)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [lastDebugError, setLastDebugError] = useState<string | null>(null)
 
   const handleClearLogs = async () => {
     try {
@@ -35,9 +36,12 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
   const handleWriteDebugLog = async () => {
     try {
       await writeDebugLog.mutateAsync()
+      setLastDebugError(null)
       addToast('success', t('logs.debug.writeSuccess'))
-    } catch {
-      addToast('error', t('logs.debug.writeFailed'))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('logs.debug.writeFailed')
+      setLastDebugError(message)
+      addToast('error', `${t('logs.debug.writeFailed')}: ${message}`)
     }
   }
 
@@ -158,6 +162,24 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
               {t('logs.debug.refreshDiagnostics')}
             </button>
           </div>
+
+          {!data?.debug && (
+            <div className="rounded-lg border border-warning/40 bg-warning/5 p-4 text-xs text-warning">
+              {t('logs.debug.backendMissing')}
+            </div>
+          )}
+
+          {error instanceof Error && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-xs text-destructive break-all">
+              {t('logs.debug.fetchError')}: {error.message}
+            </div>
+          )}
+
+          {lastDebugError && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-xs text-destructive break-all">
+              {t('logs.debug.lastWriteError')}: {lastDebugError}
+            </div>
+          )}
 
           <div className="rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
             {t('logs.debug.hint')}

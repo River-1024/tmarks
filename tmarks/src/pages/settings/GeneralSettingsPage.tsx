@@ -207,7 +207,7 @@ export function GeneralSettingsPage() {
 
   return (
     <div className="w-[80%] mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
-      <div className="card p-4 sm:p-6">
+      <div className="card relative z-40 p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">{t('title')}</h1>
@@ -249,7 +249,7 @@ export function GeneralSettingsPage() {
         </div>
       </div>
 
-      <div className="card p-3 sm:p-6">
+      <div className="card relative z-10 p-3 sm:p-6">
         <SettingsTabs tabs={tabs} activeTab={activeTab} onTabChange={handleTabChange}>
           {activeTab === 'basic' && <BasicSettingsTab />}
 

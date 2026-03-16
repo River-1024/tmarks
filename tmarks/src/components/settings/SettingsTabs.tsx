@@ -58,7 +58,7 @@ export function SettingsTabs({ tabs, activeTab, onTabChange, children }: Setting
       </div>
 
       {/* 桌面端标签页导航 */}
-      <div className="hidden sm:block border-b border-border overflow-x-auto scrollbar-hide">
+      <div className="hidden sm:block relative z-30 border-b border-border overflow-x-auto scrollbar-hide bg-card">
         <div className="flex gap-1 min-w-max">
           {tabs.map((tab) => (
             <button
@@ -79,7 +79,7 @@ export function SettingsTabs({ tabs, activeTab, onTabChange, children }: Setting
       </div>
 
       {/* 标签页内容 */}
-      <div key={activeTab} className="animate-in fade-in duration-200">{children}</div>
+      <div key={activeTab} className="relative z-0 animate-in fade-in duration-200">{children}</div>
     </div>
   )
 }

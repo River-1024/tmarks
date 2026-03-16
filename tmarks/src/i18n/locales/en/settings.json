@@ -390,6 +390,9 @@
       "refreshDiagnostics": "Refresh diagnostics",
       "writeSuccess": "Test log written",
       "writeFailed": "Failed to write test log",
+      "fetchError": "Failed to load diagnostics",
+      "lastWriteError": "Last write error",
+      "backendMissing": "The backend did not return diagnostics. This usually means the Functions deployment is not on the latest version, or the logs endpoint was not deployed successfully.",
       "hint": "If “DB supports log config columns” is false, the migration has not been applied yet, but basic logs should still be writable now."
     },
     "infoBox": {
