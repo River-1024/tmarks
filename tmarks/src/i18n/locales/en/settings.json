@@ -376,6 +376,22 @@
     "empty": "No logs yet",
     "ip": "IP",
     "userAgent": "Device",
+    "debug": {
+      "title": "Log Diagnostics",
+      "description": "Inspect backend logging capabilities, active config, and write a manual test log",
+      "columnsSupported": "DB supports log config columns",
+      "preferencesFound": "Log preferences loaded",
+      "loggingEnabled": "Effective logging enabled",
+      "retentionDays": "Active retention days",
+      "maxEntries": "Active max entries",
+      "latestLog": "Latest log",
+      "none": "None",
+      "writeTest": "Write test log",
+      "refreshDiagnostics": "Refresh diagnostics",
+      "writeSuccess": "Test log written",
+      "writeFailed": "Failed to write test log",
+      "hint": "If “DB supports log config columns” is false, the migration has not been applied yet, but basic logs should still be writable now."
+    },
     "infoBox": {
       "title": "About logs",
       "tip1": "AI connection tests store request summaries and response results without exposing raw API keys",

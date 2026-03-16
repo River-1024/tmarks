@@ -473,4 +473,16 @@ export interface OperationLogEntry {
 export interface OperationLogsResponse {
   logs: OperationLogEntry[]
   total: number
+  debug?: {
+    operation_log_columns_supported: boolean
+    preferences_found: boolean
+    effective_logging_enabled: boolean
+    retention_days: number
+    max_entries: number
+    latest_log: {
+      id: number
+      event_type: string
+      created_at: string
+    } | null
+  }
 }

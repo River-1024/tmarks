@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   BarChart3,
@@ -61,6 +61,7 @@ function isValidTab(tab: string | null): tab is TabId {
 
 export function GeneralSettingsPage() {
   const { t } = useTranslation('settings')
+  const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: preferences, isLoading } = usePreferences()
@@ -68,9 +69,9 @@ export function GeneralSettingsPage() {
   const { user, logout } = useAuthStore()
   const { addToast } = useToastStore()
 
-  const activeTab: TabId = isValidTab(searchParams.get('tab'))
-    ? (searchParams.get('tab') as TabId)
-    : 'basic'
+  const [activeTab, setActiveTab] = useState<TabId>(
+    isValidTab(searchParams.get('tab')) ? (searchParams.get('tab') as TabId) : 'basic',
+  )
   const [localPreferences, setLocalPreferences] = useState<UserPreferences | null>(null)
   const [tabActions, setTabActions] = useState<TabActions | null>(null)
 
@@ -81,6 +82,11 @@ export function GeneralSettingsPage() {
   }, [preferences])
 
   useEffect(() => {
+    const tab = new URLSearchParams(location.search).get('tab')
+    setActiveTab(isValidTab(tab) ? tab : 'basic')
+  }, [location.search])
+
+  useEffect(() => {
     if (activeTab !== 'ai') {
       setTabActions(null)
     }
@@ -89,6 +95,7 @@ export function GeneralSettingsPage() {
   const handleTabChange = (tabId: string) => {
     if (!isValidTab(tabId)) return
 
+    setActiveTab(tabId)
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('tab', tabId)
     setSearchParams(nextParams, { replace: true })

@@ -21,6 +21,20 @@ function getPreferenceNumber(value: number | null | undefined, fallback: number)
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+async function hasOperationLogColumns(db: D1Database) {
+  try {
+    await db
+      .prepare('SELECT enable_operation_logging FROM user_preferences LIMIT 1')
+      .first()
+    return true
+  } catch (error) {
+    if (error instanceof Error && /no such column: enable_operation_logging/i.test(error.message)) {
+      return false
+    }
+    throw error
+  }
+}
+
 export async function writeAuditLog(
   db: D1Database,
   { userId, eventType, payload, ip, userAgent }: WriteAuditLogOptions,
@@ -31,14 +45,18 @@ export async function writeAuditLog(
     let maxEntries = DEFAULT_MAX_ENTRIES
 
     if (userId) {
-      const preferences = await db
-        .prepare(
-          `SELECT enable_operation_logging, operation_log_retention_days, operation_log_max_entries
-           FROM user_preferences
-           WHERE user_id = ?`,
-        )
-        .bind(userId)
-        .first<UserLogPreferences>()
+      const operationLogColumnsSupported = await hasOperationLogColumns(db)
+
+      const preferences = operationLogColumnsSupported
+        ? await db
+            .prepare(
+              `SELECT enable_operation_logging, operation_log_retention_days, operation_log_max_entries
+               FROM user_preferences
+               WHERE user_id = ?`,
+            )
+            .bind(userId)
+            .first<UserLogPreferences>()
+        : null
 
       if (preferences) {
         loggingEnabled = preferences.enable_operation_logging !== 0

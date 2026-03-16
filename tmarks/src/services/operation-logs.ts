@@ -7,6 +7,10 @@ export const operationLogsService = {
     return response.data!
   },
 
+  async writeDebugLog(): Promise<void> {
+    await apiClient.post('/settings/logs')
+  },
+
   async clearLogs(): Promise<void> {
     await apiClient.delete('/settings/logs')
   },

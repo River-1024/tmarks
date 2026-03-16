@@ -23,6 +23,7 @@ export function SettingsTabs({ tabs, activeTab, onTabChange, children }: Setting
       {/* 移动端下拉选择 */}
       <div className="sm:hidden relative">
         <button
+          type="button"
           onClick={() => setShowMobileMenu(!showMobileMenu)}
           className="w-full flex items-center justify-between gap-2 px-4 py-3 text-sm font-medium bg-muted/30 rounded-lg border border-border"
         >
@@ -37,6 +38,7 @@ export function SettingsTabs({ tabs, activeTab, onTabChange, children }: Setting
             {tabs.map((tab) => (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => {
                   onTabChange(tab.id)
                   setShowMobileMenu(false)
@@ -61,6 +63,7 @@ export function SettingsTabs({ tabs, activeTab, onTabChange, children }: Setting
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => onTabChange(tab.id)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap ${
                 activeTab === tab.id

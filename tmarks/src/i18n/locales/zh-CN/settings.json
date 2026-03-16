@@ -376,6 +376,22 @@
     "empty": "暂无日志记录",
     "ip": "IP",
     "userAgent": "设备",
+    "debug": {
+      "title": "日志调试",
+      "description": "检查后端日志能力、当前配置以及手动写入测试日志",
+      "columnsSupported": "数据库已支持日志配置列",
+      "preferencesFound": "已读取到日志配置",
+      "loggingEnabled": "当前有效日志开关",
+      "retentionDays": "当前保留天数",
+      "maxEntries": "当前最大数量",
+      "latestLog": "最近一条日志",
+      "none": "无",
+      "writeTest": "写入测试日志",
+      "refreshDiagnostics": "刷新诊断",
+      "writeSuccess": "测试日志已写入",
+      "writeFailed": "测试日志写入失败",
+      "hint": "如果“数据库已支持日志配置列”为 false，说明日志配置迁移还没跑，但现在依旧应该能写入基础日志。"
+    },
     "infoBox": {
       "title": "日志说明",
       "tip1": "AI 测试连接会记录请求摘要与响应结果，不会明文展示 API Key",

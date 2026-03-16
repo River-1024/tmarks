@@ -320,6 +320,7 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
           {PROVIDERS.map((p) => (
             <button
               key={p}
+              type="button"
               onClick={() => handleProviderChange(p)}
               className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
                 provider === p
@@ -419,7 +420,7 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
           </div>
           
           {showModelDropdown && allModels.length > 0 && (
-            <div className="absolute z-10 mt-2 right-0 w-full max-h-64 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+            <div className="absolute top-full left-0 z-20 mt-2 w-full max-h-64 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
               {allModels.map((m) => (
                 <button
                   key={m}
@@ -561,6 +562,7 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
 
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={handleTest}
           disabled={testConnection.isPending || !apiKey.trim()}
           className="btn btn-ghost flex items-center gap-2"
@@ -594,6 +596,7 @@ export function AiSettingsTab({ onRegisterActions }: AiSettingsTabProps) {
 
       <div className="flex justify-end gap-2 pt-4 border-t border-border">
         <button
+          type="button"
           onClick={handleSave}
           disabled={updateSettings.isPending || !hasChanges}
           className="btn btn-primary flex items-center gap-2"

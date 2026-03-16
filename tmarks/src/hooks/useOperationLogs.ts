@@ -20,3 +20,14 @@ export function useClearOperationLogs() {
     },
   })
 }
+
+export function useWriteOperationDebugLog() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => operationLogsService.writeDebugLog(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: OPERATION_LOGS_QUERY_KEY })
+    },
+  })
+}

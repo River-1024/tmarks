@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { History, Trash2, Info, RefreshCw } from 'lucide-react'
+import { History, Trash2, Info, RefreshCw, Bug } from 'lucide-react'
 import { Toggle } from '@/components/common/Toggle'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
-import { useClearOperationLogs, useOperationLogs } from '@/hooks/useOperationLogs'
+import { useClearOperationLogs, useOperationLogs, useWriteOperationDebugLog } from '@/hooks/useOperationLogs'
 import { useToastStore } from '@/stores/toastStore'
 import type { UserPreferences } from '@/lib/types'
 import { SettingsSection, SettingsItem, SettingsDivider } from '../SettingsSection'
@@ -18,6 +18,7 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
   const { t } = useTranslation('settings')
   const { addToast } = useToastStore()
   const clearLogs = useClearOperationLogs()
+  const writeDebugLog = useWriteOperationDebugLog()
   const { data, isLoading, refetch, isRefetching } = useOperationLogs(50)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
 
@@ -28,6 +29,15 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
       setShowClearConfirm(false)
     } catch {
       addToast('error', t('logs.clearFailed'))
+    }
+  }
+
+  const handleWriteDebugLog = async () => {
+    try {
+      await writeDebugLog.mutateAsync()
+      addToast('success', t('logs.debug.writeSuccess'))
+    } catch {
+      addToast('error', t('logs.debug.writeFailed'))
     }
   }
 
@@ -110,6 +120,53 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
 
       <SettingsDivider />
 
+      <SettingsSection icon={Bug} title={t('logs.debug.title')} description={t('logs.debug.description')}>
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <DebugItem label={t('logs.debug.columnsSupported')} value={String(data?.debug?.operation_log_columns_supported ?? false)} />
+            <DebugItem label={t('logs.debug.preferencesFound')} value={String(data?.debug?.preferences_found ?? false)} />
+            <DebugItem label={t('logs.debug.loggingEnabled')} value={String(data?.debug?.effective_logging_enabled ?? false)} />
+            <DebugItem label={t('logs.debug.retentionDays')} value={String(data?.debug?.retention_days ?? '-')} />
+            <DebugItem label={t('logs.debug.maxEntries')} value={String(data?.debug?.max_entries ?? '-')} />
+            <DebugItem
+              label={t('logs.debug.latestLog')}
+              value={
+                data?.debug?.latest_log
+                  ? `${data.debug.latest_log.event_type} @ ${data.debug.latest_log.created_at}`
+                  : t('logs.debug.none')
+              }
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleWriteDebugLog}
+              disabled={writeDebugLog.isPending}
+              className="btn btn-primary btn-sm"
+            >
+              <Bug className="w-4 h-4" />
+              {t('logs.debug.writeTest')}
+            </button>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+              className="btn btn-ghost btn-sm"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
+              {t('logs.debug.refreshDiagnostics')}
+            </button>
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
+            {t('logs.debug.hint')}
+          </div>
+        </div>
+      </SettingsSection>
+
+      <SettingsDivider />
+
       <SettingsSection title={t('logs.recordsTitle')} description={t('logs.recordsDescription')}>
         <div className="space-y-3">
           {isLoading ? (
@@ -152,6 +209,15 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
           <li>• {t('logs.infoBox.tip3')}</li>
         </ul>
       </InfoBox>
+    </div>
+  )
+}
+
+function DebugItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 space-y-1">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium text-foreground break-all">{value}</div>
     </div>
   )
 }
