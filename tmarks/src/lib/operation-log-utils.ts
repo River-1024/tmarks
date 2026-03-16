@@ -85,6 +85,13 @@ function buildSummary(
     case 'ai.bookmarks.batch_regenerate.apply_completed':
     case 'ai.bookmarks.batch_regenerate.apply_failed':
       return summarizeAiApply(log.event_type, payload, isZh)
+    case 'ai.bookmarks.single_generate.started':
+    case 'ai.bookmarks.single_generate.completed':
+    case 'ai.bookmarks.single_generate.request_failed':
+    case 'ai.bookmarks.single_generate.parse_failed':
+    case 'ai.bookmarks.single_generate.apply_completed':
+    case 'ai.bookmarks.single_generate.apply_failed':
+      return summarizeAiSingleGenerate(log.event_type, payload, isZh)
     case 'settings.ai.updated':
       return summarizeSettingsUpdate(payload, isZh)
     case 'settings.logs.debug':
@@ -524,6 +531,63 @@ function summarizeAiApply(eventType: string, payload: Record<string, unknown>, i
   return lines
 }
 
+function summarizeAiSingleGenerate(
+  eventType: string,
+  payload: Record<string, unknown>,
+  isZh: boolean,
+) {
+  const title = getString(payload.title) || (isZh ? '未命名书签' : 'Untitled bookmark')
+  const url = getString(payload.url)
+  const provider = getString(payload.provider)
+  const model = getString(payload.model)
+  const generatedTags = getStringArray(payload.generated_tags)
+  const selectedTags = getStringArray(payload.selected_tags)
+  const selectedAiTags = getStringArray(payload.selected_ai_tags)
+  const appliedTags = getStringArray(payload.applied_tags)
+  const finishReason = getString(payload.finish_reason)
+  const mode = getString(payload.mode)
+  const error = getString(payload.error)
+  const lines: string[] = [`${isZh ? '书签' : 'Bookmark'}: ${quoteValue(title)}`]
+
+  if (provider || model) {
+    lines.push(`${isZh ? '模型' : 'Model'}: ${[provider, model].filter(Boolean).join(' / ')}`)
+  }
+
+  if (url) {
+    lines.push(`URL: ${truncate(url, 140)}`)
+  }
+
+  if (selectedTags.length > 0 && eventType.endsWith('.started')) {
+    lines.push(`${isZh ? '当前标签' : 'Current tags'}: ${selectedTags.join(isZh ? '、' : ', ')}`)
+  }
+
+  if (generatedTags.length > 0) {
+    lines.push(`${isZh ? 'AI 标签' : 'AI tags'}: ${generatedTags.join(isZh ? '、' : ', ')}`)
+  }
+
+  if (selectedAiTags.length > 0) {
+    lines.push(`${isZh ? '选中的 AI 标签' : 'Selected AI tags'}: ${selectedAiTags.join(isZh ? '、' : ', ')}`)
+  }
+
+  if (appliedTags.length > 0) {
+    lines.push(`${isZh ? '应用后标签' : 'Applied tags'}: ${appliedTags.join(isZh ? '、' : ', ')}`)
+  }
+
+  if (mode) {
+    lines.push(`${isZh ? '模式' : 'Mode'}: ${mode}`)
+  }
+
+  if (finishReason) {
+    lines.push(`${isZh ? '结束原因' : 'Finish reason'}: ${finishReason}`)
+  }
+
+  if (error) {
+    lines.push(`${isZh ? '错误' : 'Error'}: ${truncate(error, 180)}`)
+  }
+
+  return lines
+}
+
 function summarizeSettingsUpdate(payload: Record<string, unknown>, isZh: boolean) {
   const changes = getChangeEntries(payload)
   const lines = changes.slice(0, 4).map((change) => (
@@ -730,7 +794,9 @@ function getTone(log: OperationLogEntry, payload: Record<string, unknown> | null
     log.event_type === 'ai.bookmarks.batch_regenerate.completed' ||
     log.event_type === 'ai.bookmarks.batch_regenerate.retry_completed' ||
     log.event_type === 'ai.bookmarks.item_generated' ||
-    log.event_type === 'ai.bookmarks.batch_regenerate.apply_completed'
+    log.event_type === 'ai.bookmarks.batch_regenerate.apply_completed' ||
+    log.event_type === 'ai.bookmarks.single_generate.completed' ||
+    log.event_type === 'ai.bookmarks.single_generate.apply_completed'
   ) {
     return 'success'
   }
@@ -832,6 +898,12 @@ function getEventLabel(eventType: string, isZh: boolean) {
     'ai.bookmarks.batch_regenerate.apply_started': isZh ? '应用 AI 标签' : 'Applying AI tags',
     'ai.bookmarks.batch_regenerate.apply_completed': isZh ? 'AI 标签已应用' : 'AI tags applied',
     'ai.bookmarks.batch_regenerate.apply_failed': isZh ? '应用 AI 标签失败' : 'Applying AI tags failed',
+    'ai.bookmarks.single_generate.started': isZh ? '单书签 AI 生成开始' : 'Single bookmark AI started',
+    'ai.bookmarks.single_generate.completed': isZh ? '单书签 AI 生成完成' : 'Single bookmark AI completed',
+    'ai.bookmarks.single_generate.request_failed': isZh ? '单书签 AI 请求失败' : 'Single bookmark AI request failed',
+    'ai.bookmarks.single_generate.parse_failed': isZh ? '单书签 AI 解析失败' : 'Single bookmark AI parse failed',
+    'ai.bookmarks.single_generate.apply_completed': isZh ? '单书签 AI 标签已应用' : 'Single bookmark AI tags applied',
+    'ai.bookmarks.single_generate.apply_failed': isZh ? '单书签 AI 标签应用失败' : 'Single bookmark AI tags apply failed',
     'settings.ai.updated': isZh ? '更新 AI 设置' : 'AI settings updated',
     'settings.ai.test_connection': isZh ? 'AI 请求测试' : 'AI request test',
     'settings.logs.debug': isZh ? '写入调试日志' : 'Debug log written',
@@ -886,6 +958,10 @@ function getFieldLabel(field: string, isZh: boolean) {
     generated_tags: isZh ? 'AI 标签' : 'AI tags',
     bookmarks: isZh ? '书签列表' : 'Bookmarks',
     created_tags: isZh ? '新增标签' : 'Created tags',
+    selected_tags: isZh ? '当前标签' : 'Current tags',
+    selected_ai_tags: isZh ? '选中的 AI 标签' : 'Selected AI tags',
+    applied_tags: isZh ? '应用后标签' : 'Applied tags',
+    mode: isZh ? '模式' : 'Mode',
     parsed_item_count: isZh ? '解析条数' : 'Parsed items',
     finish_reason: isZh ? '结束原因' : 'Finish reason',
     retry_from_finish_reason: isZh ? '重试触发原因' : 'Retry trigger',

@@ -287,6 +287,7 @@ export function BatchAiRegenerateModal({
 
   const [step, setStep] = useState<Step>(1)
   const [drafts, setDrafts] = useState<DraftItem[]>([])
+  const [aiGeneratedTagsByBookmark, setAiGeneratedTagsByBookmark] = useState<Record<string, string[]>>({})
   const [isGenerating, setIsGenerating] = useState(false)
   const [isApplying, setIsApplying] = useState(false)
   const [hasApplied, setHasApplied] = useState(false)
@@ -296,11 +297,16 @@ export function BatchAiRegenerateModal({
   const [successMessage, setSuccessMessage] = useState('')
 
   const existingTags = tagsData?.tags || []
+  const existingTagNameSet = useMemo(
+    () => new Set(existingTags.map((tag) => tag.name.toLowerCase())),
+    [existingTags],
+  )
 
   useEffect(() => {
     if (!isOpen) {
       setStep(1)
       setDrafts([])
+      setAiGeneratedTagsByBookmark({})
       setIsGenerating(false)
       setIsApplying(false)
       setHasApplied(false)
@@ -313,6 +319,7 @@ export function BatchAiRegenerateModal({
     }
 
     document.body.style.overflow = 'hidden'
+    setAiGeneratedTagsByBookmark({})
     setDrafts(
       bookmarks.map((bookmark) => ({
         bookmarkId: bookmark.id,
@@ -613,18 +620,21 @@ ${t('batch.ai.prompt.rules')}`
         ...itemLogEntries,
       ])
 
-      setDrafts(
-        bookmarks.map((bookmark) => {
-          const { item: matched } = matchAiItem(bookmark, items)
+      const nextDrafts = bookmarks.map((bookmark) => {
+        const { item: matched } = matchAiItem(bookmark, items)
 
-          return {
-            bookmarkId: bookmark.id,
-            title: bookmark.title,
-            url: bookmark.url,
-            description: bookmark.description || '',
-            tags: normalizeTags(matched?.tags || bookmark.tags.map((tag) => tag.name)),
-          }
-        })
+        return {
+          bookmarkId: bookmark.id,
+          title: bookmark.title,
+          url: bookmark.url,
+          description: bookmark.description || '',
+          tags: normalizeTags(matched?.tags || bookmark.tags.map((tag) => tag.name)),
+        }
+      })
+
+      setDrafts(nextDrafts)
+      setAiGeneratedTagsByBookmark(
+        Object.fromEntries(nextDrafts.map((draft) => [draft.bookmarkId, draft.tags])),
       )
       setStep(3)
     } catch (error) {
@@ -643,6 +653,32 @@ ${t('batch.ai.prompt.rules')}`
           ? { ...draft, tags: normalizeTags(value.split(/[，,]/)) }
           : draft
       )
+    )
+  }
+
+  const toggleDraftTag = (bookmarkId: string, tagName: string) => {
+    const normalized = tagName.trim().toLowerCase()
+    if (!normalized) return
+
+    setDrafts((prev) =>
+      prev.map((draft) => {
+        if (draft.bookmarkId !== bookmarkId) {
+          return draft
+        }
+
+        const exists = draft.tags.some((tag) => tag.toLowerCase() === normalized)
+        if (exists) {
+          return {
+            ...draft,
+            tags: draft.tags.filter((tag) => tag.toLowerCase() !== normalized),
+          }
+        }
+
+        return {
+          ...draft,
+          tags: normalizeTags([...draft.tags, tagName]),
+        }
+      }),
     )
   }
 
@@ -857,25 +893,149 @@ ${t('batch.ai.prompt.rules')}`
 
             {step === 3 && (
               <div className="space-y-4">
-                {drafts.map((draft) => (
-                  <div key={draft.bookmarkId} className="rounded-2xl border border-border bg-card p-4">
-                    <div className="font-medium text-foreground truncate">{draft.title}</div>
-                    <div className="text-xs text-muted-foreground truncate mt-1">{draft.url}</div>
-                    {draft.description && (
-                      <div className="text-sm text-muted-foreground mt-3 line-clamp-2">{draft.description}</div>
-                    )}
+                {drafts.map((draft) => {
+                  const selectedTagSet = new Set(draft.tags.map((tag) => tag.toLowerCase()))
+                  const aiGeneratedTags = aiGeneratedTagsByBookmark[draft.bookmarkId] || []
 
-                    <label className="block text-sm font-medium text-foreground mt-4 mb-2">
-                      {t('batch.ai.tagsLabel')}
-                    </label>
-                    <input
-                      value={draft.tags.join(', ')}
-                      onChange={(event) => updateDraftTags(draft.bookmarkId, event.target.value)}
-                      className="input input-bordered w-full"
-                      placeholder={t('batch.ai.tagsPlaceholder')}
-                    />
-                  </div>
-                ))}
+                  return (
+                    <div key={draft.bookmarkId} className="rounded-2xl border border-border bg-card p-4">
+                      <div className="font-medium text-foreground truncate">{draft.title}</div>
+                      <div className="text-xs text-muted-foreground truncate mt-1">{draft.url}</div>
+                      {draft.description && (
+                        <div className="text-sm text-muted-foreground mt-3 line-clamp-2">{draft.description}</div>
+                      )}
+
+                      {draft.tags.length > 0 && (
+                        <div className="mt-4 p-2 bg-primary/5 border border-primary/20 rounded-lg">
+                          <div className="flex flex-wrap gap-1.5">
+                            {draft.tags.map((tagName) => {
+                              const isNewTag = !existingTagNameSet.has(tagName.toLowerCase())
+
+                              return (
+                                <button
+                                  key={`${draft.bookmarkId}-selected-${tagName}`}
+                                  type="button"
+                                  onClick={() => toggleDraftTag(draft.bookmarkId, tagName)}
+                                  className="text-xs px-2.5 py-1 rounded-full bg-primary text-primary-content hover:bg-primary/90 transition-colors shadow-sm"
+                                  disabled={isGenerating || isApplying}
+                                >
+                                  {tagName}
+                                  {isNewTag && (
+                                    <span className="ml-1 text-[10px] italic uppercase tracking-widest text-primary-content/85">
+                                      {t('form.ai.newBadge')}
+                                    </span>
+                                  )}{' '}
+                                  ×
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-2">
+                        <div className="p-2.5 rounded-lg border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent min-h-[124px]">
+                          <div className="mb-2 flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-semibold text-foreground">{t('form.ai.resultTitle')}</p>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{t('form.ai.resultHint')}</p>
+                            </div>
+                            <span className="px-2 py-0.5 text-[11px] rounded-full bg-primary/20 text-primary font-medium">
+                              {aiGeneratedTags.length}
+                            </span>
+                          </div>
+
+                          {aiGeneratedTags.length === 0 ? (
+                            <p className="text-xs text-muted-foreground py-1">{t('form.ai.emptyHint')}</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {aiGeneratedTags.map((tagName) => {
+                                const lowerTagName = tagName.toLowerCase()
+                                const isSelected = selectedTagSet.has(lowerTagName)
+                                const isNewTag = !existingTagNameSet.has(lowerTagName)
+
+                                return (
+                                  <button
+                                    key={`${draft.bookmarkId}-ai-${tagName}`}
+                                    type="button"
+                                    onClick={() => toggleDraftTag(draft.bookmarkId, tagName)}
+                                    className={`text-xs px-2.5 py-1 rounded-full transition-colors border ${
+                                      isSelected
+                                        ? 'bg-primary text-primary-content border-primary'
+                                        : 'bg-card border-border text-foreground hover:border-primary/50 hover:bg-primary/5'
+                                    }`}
+                                    disabled={isGenerating || isApplying}
+                                  >
+                                    {tagName}
+                                    {isNewTag && (
+                                      <span
+                                        className={`ml-1 text-[10px] italic uppercase tracking-widest ${
+                                          isSelected ? 'text-primary-content/85' : 'text-info'
+                                        }`}
+                                      >
+                                        {t('form.ai.newBadge')}
+                                      </span>
+                                    )}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-2.5 rounded-lg border border-emerald-500/25 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent min-h-[124px]">
+                          <div className="mb-2 flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-semibold text-foreground">{t('form.tagLibrary.title')}</p>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{t('form.tagLibrary.hint')}</p>
+                            </div>
+                            <span className="px-2 py-0.5 text-[11px] rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-medium">
+                              {existingTags.length}
+                            </span>
+                          </div>
+
+                          <div className="max-h-[140px] overflow-y-auto scrollbar-theme min-h-0 overscroll-contain pr-0.5">
+                            <div className="flex flex-wrap gap-1.5">
+                              {existingTags.length === 0 ? (
+                                <p className="text-xs text-muted-foreground py-1">{t('form.noTags')}</p>
+                              ) : (
+                                existingTags.map((tag) => {
+                                  const isSelected = selectedTagSet.has(tag.name.toLowerCase())
+
+                                  return (
+                                    <button
+                                      key={`${draft.bookmarkId}-lib-${tag.id}`}
+                                      type="button"
+                                      onClick={() => toggleDraftTag(draft.bookmarkId, tag.name)}
+                                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                        isSelected
+                                          ? 'bg-primary text-primary-content border-primary'
+                                          : 'bg-card border-border text-foreground hover:border-primary/50 hover:bg-primary/5'
+                                      }`}
+                                      disabled={isGenerating || isApplying}
+                                    >
+                                      {tag.name}
+                                    </button>
+                                  )
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <label className="block text-sm font-medium text-foreground mt-4 mb-2">
+                        {t('batch.ai.tagsLabel')}
+                      </label>
+                      <input
+                        value={draft.tags.join(', ')}
+                        onChange={(event) => updateDraftTags(draft.bookmarkId, event.target.value)}
+                        className="input input-bordered w-full"
+                        placeholder={t('batch.ai.tagsPlaceholder')}
+                      />
+                    </div>
+                  )
+                })}
               </div>
             )}
 

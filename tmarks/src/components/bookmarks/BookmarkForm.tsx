@@ -5,8 +5,14 @@ import { useCreateBookmark, useUpdateBookmark, useDeleteBookmark } from '@/hooks
 import { useCreateTag, useTags } from '@/hooks/useTags'
 import { useAiSettings } from '@/hooks/useAiSettings'
 import { bookmarksService } from '@/services/bookmarks'
+import { operationLogsService } from '@/services/operation-logs'
 import { callAI } from '@/lib/ai/client'
-import type { Bookmark, CreateBookmarkRequest, UpdateBookmarkRequest } from '@/lib/types'
+import type {
+  Bookmark,
+  CreateBookmarkRequest,
+  UpdateBookmarkRequest,
+  OperationLogWriteEntry,
+} from '@/lib/types'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Z_INDEX } from '@/lib/constants/z-index'
 
@@ -202,6 +208,19 @@ ${bookmarkBlock}
 ${contract}`
 }
 
+function getAiFinishReason(raw: unknown) {
+  if (!isRecord(raw) || !Array.isArray(raw.choices) || raw.choices.length === 0) {
+    return null
+  }
+
+  const firstChoice = raw.choices[0]
+  if (!isRecord(firstChoice)) {
+    return null
+  }
+
+  return getStringValue(firstChoice.finish_reason)
+}
+
 export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps) {
   const { t } = useTranslation('bookmarks')
   const isEditing = !!bookmark
@@ -265,6 +284,20 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
   )
   const selectedTagCount = selectedTagIds.length + selectedNewTags.length
   const selectedTagIdSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds])
+
+  const writeOperationLogEntries = async (entries: OperationLogWriteEntry[]) => {
+    if (entries.length === 0) {
+      return
+    }
+
+    try {
+      for (let index = 0; index < entries.length; index += 100) {
+        await operationLogsService.writeEntries(entries.slice(index, index + 100))
+      }
+    } catch (logError) {
+      logger.error('Failed to write bookmark form AI logs:', logError)
+    }
+  }
 
   // URL 变化时检查是否已存在
   useEffect(() => {
@@ -405,8 +438,30 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
       return
     }
 
+    const selectedNewTagsSnapshot = [...selectedNewTags]
+    const selectedExistingTagNames = selectedTagIds
+      .map((tagId) => tags.find((tag) => tag.id === tagId)?.name)
+      .filter((name): name is string => Boolean(name))
+    const selectedTagNamesSnapshot = normalizeTags([
+      ...selectedExistingTagNames,
+      ...selectedNewTagsSnapshot,
+    ])
+    const selectedAiTagNames = normalizeTags(
+      aiSuggestedTagNames.filter((tagName) =>
+        selectedTagNamesSnapshot.some((selectedTag) => normalizeTagName(selectedTag) === normalizeTagName(tagName)),
+      ),
+    )
+    const shouldLogAiApply = selectedAiTagNames.length > 0
+
     try {
       const resolvedTagIds = await ensureResolvedTagIds()
+      const resolvedTagNames = normalizeTags([
+        ...resolvedTagIds
+          .map((id) => tags.find((tag) => tag.id === id)?.name)
+          .filter((name): name is string => Boolean(name)),
+        ...selectedNewTagsSnapshot,
+      ])
+      let savedBookmarkId = bookmark?.id || null
 
       if (isEditing && bookmark) {
         const updateData: UpdateBookmarkRequest = {
@@ -434,7 +489,8 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
           updateData.cover_image = coverImage.trim() ? coverImage.trim() : null
         }
 
-        await updateBookmark.mutateAsync({ id: bookmark.id, data: updateData })
+        const updatedBookmark = await updateBookmark.mutateAsync({ id: bookmark.id, data: updateData })
+        savedBookmarkId = updatedBookmark.id
       } else {
         const createData: CreateBookmarkRequest = {
           title: title.trim(),
@@ -447,11 +503,43 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
           is_public: isPublic,
         }
 
-        await createBookmark.mutateAsync(createData)
+        const createdBookmark = await createBookmark.mutateAsync(createData)
+        savedBookmarkId = createdBookmark.id
+      }
+
+      if (shouldLogAiApply) {
+        await writeOperationLogEntries([
+          {
+            event_type: 'ai.bookmarks.single_generate.apply_completed',
+            payload: {
+              bookmark_id: savedBookmarkId,
+              title: title.trim(),
+              url: url.trim(),
+              selected_ai_tags: selectedAiTagNames,
+              applied_tags: resolvedTagNames,
+              mode: isEditing ? 'update' : 'create',
+            },
+          },
+        ])
       }
       onSuccess?.()
       onClose()
     } catch (error) {
+      if (shouldLogAiApply) {
+        await writeOperationLogEntries([
+          {
+            event_type: 'ai.bookmarks.single_generate.apply_failed',
+            payload: {
+              bookmark_id: bookmark?.id || null,
+              title: title.trim(),
+              url: url.trim(),
+              selected_ai_tags: selectedAiTagNames,
+              mode: isEditing ? 'update' : 'create',
+              error: error instanceof Error ? error.message : String(error),
+            },
+          },
+        ])
+      }
       setError(error instanceof Error ? error.message : t('form.operationFailed'))
     }
   }
@@ -536,8 +624,27 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
       existingTags: tags.map((tag) => tag.name),
       customPrompt,
     })
+    const requestSummary = {
+      provider: aiConfig.provider,
+      model: aiConfig.model || null,
+      api_url: aiConfig.apiUrl || null,
+      bookmark_id: bookmark?.id || null,
+      title: title.trim(),
+      url: url.trim(),
+      description: description.trim(),
+      selected_tags: allSelectedTagNames,
+      existing_tags: tags.map((tag) => tag.name),
+      prompt,
+    }
 
     try {
+      await writeOperationLogEntries([
+        {
+          event_type: 'ai.bookmarks.single_generate.started',
+          payload: requestSummary,
+        },
+      ])
+
       const result = await callAI({
         provider: aiConfig.provider,
         apiKey: aiConfig.apiKey,
@@ -552,12 +659,50 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
       })
 
       if (extractedTags.length === 0) {
+        await writeOperationLogEntries([
+          {
+            event_type: 'ai.bookmarks.single_generate.parse_failed',
+            payload: {
+              ...requestSummary,
+              finish_reason: getAiFinishReason(result.raw),
+              error: 'No usable tags in AI response',
+              response: {
+                content: result.content,
+                raw: result.raw,
+              },
+            },
+          },
+        ])
         setError(t('form.ai.noResult'))
         return
       }
 
+      await writeOperationLogEntries([
+        {
+          event_type: 'ai.bookmarks.single_generate.completed',
+          payload: {
+            ...requestSummary,
+            finish_reason: getAiFinishReason(result.raw),
+            generated_tags: extractedTags,
+            response: {
+              content: result.content,
+              raw: result.raw,
+            },
+          },
+        },
+      ])
+
       setAiSuggestedTagNames(extractedTags)
     } catch (aiError) {
+      await writeOperationLogEntries([
+        {
+          event_type: 'ai.bookmarks.single_generate.request_failed',
+          payload: {
+            ...requestSummary,
+            error: aiError instanceof Error ? aiError.message : String(aiError),
+          },
+        },
+      ])
       logger.error('AI tag generation failed:', aiError)
       setError(aiError instanceof Error ? aiError.message : t('form.ai.generateFailed'))
     } finally {
