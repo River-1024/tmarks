@@ -329,6 +329,17 @@ export interface BatchDeleteTagsResponse {
   affected_count: number
 }
 
+export interface MergeTagsRequest {
+  tag_ids: string[]
+  name: string
+}
+
+export interface MergeTagsResponse {
+  success: boolean
+  merged_tag: Tag
+  affected_count: number
+}
+
 export interface TabGroup {
   id: string
   user_id: string

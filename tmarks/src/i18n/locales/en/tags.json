@@ -30,6 +30,9 @@
     "edit": "Edit tag",
     "delete": "Delete tag",
     "deleting": "Deleting...",
+    "merge": "Merge",
+    "merging": "Merging...",
+    "mergeConfirm": "Confirm merge",
     "batchDelete": "Batch delete",
     "batchDeleting": "Deleting...",
     "save": "Save",
@@ -40,7 +43,9 @@
     "placeholder": "Enter tag name...",
     "namePlaceholder": "Enter tag name",
     "nameLabel": "Tag name",
-    "editHint": "Adjust tag name, only affects this tag."
+    "editHint": "Adjust tag name, only affects this tag.",
+    "mergeHint": "Merge the selected {{count}} tags into one and update associated bookmarks.",
+    "mergePlaceholder": "Enter the merged tag name"
   },
   "manage": {
     "title": "Tag Management",
@@ -65,7 +70,9 @@
     "deleteSuccess": "Tag deleted successfully",
     "deleteFailed": "Delete failed, please try again",
     "batchDeleteSuccess": "Deleted {{count}} tags successfully",
-    "batchDeleteFailed": "Batch delete failed, please try again"
+    "batchDeleteFailed": "Batch delete failed, please try again",
+    "mergeSuccess": "Merged {{count}} tags successfully",
+    "mergeFailed": "Merge failed, please try again"
   },
   "status": {
     "loading": "Loading..."

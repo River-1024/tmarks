@@ -77,3 +77,15 @@ export function useDeleteTags() {
     },
   })
 }
+
+export function useMergeTags() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: { tag_ids: string[]; name: string }) => tagsService.mergeTags(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [TAGS_QUERY_KEY] })
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] })
+    },
+  })
+}

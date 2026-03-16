@@ -9,9 +9,11 @@ interface TagFormModalProps {
   onConfirm: (name: string) => void
   onCancel: () => void
   confirmLabel?: string
+  description?: string
   isSubmitting?: boolean
   onDelete?: () => void
   isDeleting?: boolean
+  placeholder?: string
 }
 
 export function TagFormModal({
@@ -21,9 +23,11 @@ export function TagFormModal({
   onConfirm,
   onCancel,
   confirmLabel,
+  description,
   isSubmitting = false,
   onDelete,
   isDeleting = false,
+  placeholder,
 }: TagFormModalProps) {
   const { t } = useTranslation('tags')
   const { t: tc } = useTranslation('common')
@@ -45,7 +49,7 @@ export function TagFormModal({
       <div className="relative w-full max-w-sm card p-5 space-y-4 animate-scale-in border border-border shadow-2xl rounded-xl" style={{ backgroundColor: 'var(--card)' }}>
         <div>
           <h3 className="text-base font-semibold mb-1">{title}</h3>
-          <p className="text-xs text-muted-foreground">{t('form.editHint')}</p>
+          <p className="text-xs text-muted-foreground">{description ?? t('form.editHint')}</p>
         </div>
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">{t('form.nameLabel')}</label>
@@ -54,7 +58,7 @@ export function TagFormModal({
             className="input w-full"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={t('form.namePlaceholder')}
+            placeholder={placeholder ?? t('form.namePlaceholder')}
             autoFocus
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !isSubmitting) onConfirm(name.trim())

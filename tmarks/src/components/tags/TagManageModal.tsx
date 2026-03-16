@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Tag } from '@/lib/types'
-import { useDeleteTags, useUpdateTag } from '@/hooks/useTags'
+import { useDeleteTags, useMergeTags, useUpdateTag } from '@/hooks/useTags'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { AlertDialog } from '@/components/common/AlertDialog'
 import { TagFormModal } from './TagFormModal'
@@ -26,9 +26,12 @@ export function TagManageModal({ tags, onClose }: TagManageModalProps) {
   const [showErrorAlert, setShowErrorAlert] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
+  const [mergeName, setMergeName] = useState('')
 
   const deleteTags = useDeleteTags()
   const updateTag = useUpdateTag()
+  const mergeTags = useMergeTags()
 
   const sortedTags = useMemo(() => {
     return [...tags].sort((a, b) => (b.bookmark_count || 0) - (a.bookmark_count || 0))
@@ -41,14 +44,21 @@ export function TagManageModal({ tags, onClose }: TagManageModalProps) {
 
   const isAllSelected = sortedTags.length > 0 && selectedTagIds.length === sortedTags.length
   const isDeleting = deleteTags.isPending
+  const isMerging = mergeTags.isPending
 
   useEffect(() => {
     const validIds = new Set(sortedTags.map((tag) => tag.id))
     setSelectedTagIds((prev) => prev.filter((id) => validIds.has(id)))
   }, [sortedTags])
 
+  useEffect(() => {
+    if (!isMergeModalOpen) return
+    const defaultName = selectedTags[0]?.name ?? ''
+    setMergeName(defaultName)
+  }, [isMergeModalOpen, selectedTags])
+
   const handleEditClick = (tag: Tag) => {
-    if (isDeleting) return
+    if (isDeleting || isMerging) return
     setEditingTag(tag)
     setEditName(tag.name)
     setIsEditModalOpen(true)
@@ -83,14 +93,14 @@ export function TagManageModal({ tags, onClose }: TagManageModalProps) {
   }
 
   const toggleTagSelection = (tagId: string) => {
-    if (isDeleting) return
+    if (isDeleting || isMerging) return
     setSelectedTagIds((prev) =>
       prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
     )
   }
 
   const handleToggleSelectAll = () => {
-    if (isDeleting) return
+    if (isDeleting || isMerging) return
     setSelectedTagIds(isAllSelected ? [] : sortedTags.map((tag) => tag.id))
   }
 
@@ -107,6 +117,42 @@ export function TagManageModal({ tags, onClose }: TagManageModalProps) {
     if (selectedTags.length === 0) return
     setTagToDelete(null)
     setShowDeleteConfirm(true)
+  }
+
+  const openMergeModal = () => {
+    if (selectedTags.length < 2 || isDeleting || isMerging) return
+    setMergeName(selectedTags[0]?.name ?? '')
+    setIsMergeModalOpen(true)
+  }
+
+  const handleCancelMerge = () => {
+    setIsMergeModalOpen(false)
+    setMergeName('')
+  }
+
+  const handleConfirmMerge = async (value?: string) => {
+    const nextName = value?.trim() ?? mergeName.trim()
+    if (selectedTagIds.length < 2 || !nextName) return
+
+    try {
+      await mergeTags.mutateAsync({
+        tag_ids: selectedTagIds,
+        name: nextName,
+      })
+      if (editingTag && selectedTagIds.includes(editingTag.id)) {
+        setEditingTag(null)
+        setEditName('')
+        setIsEditModalOpen(false)
+      }
+      setSuccessMessage(t('message.mergeSuccess', { count: selectedTagIds.length }))
+      setShowSuccessAlert(true)
+      clearSelection()
+      handleCancelMerge()
+    } catch (error) {
+      logger.error('Failed to merge tags:', error)
+      setErrorMessage(t('message.mergeFailed'))
+      setShowErrorAlert(true)
+    }
   }
 
   const handleConfirmDelete = async () => {
@@ -177,15 +223,23 @@ export function TagManageModal({ tags, onClose }: TagManageModalProps) {
                   type="button"
                   onClick={handleToggleSelectAll}
                   className="btn btn-sm btn-outline"
-                  disabled={isDeleting}
+                  disabled={isDeleting || isMerging}
                 >
                   {isAllSelected ? t('manage.clearSelection') : t('manage.selectAll')}
                 </button>
                 <button
                   type="button"
+                  onClick={openMergeModal}
+                  className="btn btn-sm btn-outline"
+                  disabled={selectedTagIds.length < 2 || isDeleting || isMerging}
+                >
+                  {isMerging ? t('action.merging') : t('action.merge')}
+                </button>
+                <button
+                  type="button"
                   onClick={openBatchDeleteConfirm}
                   className="btn btn-sm bg-error/10 hover:bg-error/20 border-none text-error"
-                  disabled={selectedTagIds.length === 0 || isDeleting}
+                  disabled={selectedTagIds.length === 0 || isDeleting || isMerging}
                 >
                   {isDeleting ? t('action.batchDeleting') : t('action.batchDelete')}
                 </button>
@@ -212,7 +266,7 @@ export function TagManageModal({ tags, onClose }: TagManageModalProps) {
               type="button"
               onClick={clearSelection}
               className="text-primary hover:underline disabled:opacity-60"
-              disabled={isDeleting}
+              disabled={isDeleting || isMerging}
             >
               {t('manage.clearSelection')}
             </button>
@@ -255,7 +309,7 @@ export function TagManageModal({ tags, onClose }: TagManageModalProps) {
                           onChange={() => toggleTagSelection(tag.id)}
                           className="checkbox checkbox-sm"
                           aria-label={tag.name}
-                          disabled={isDeleting}
+                          disabled={isDeleting || isMerging}
                         />
                       </div>
 
@@ -344,6 +398,18 @@ export function TagManageModal({ tags, onClose }: TagManageModalProps) {
           }
         }}
         isDeleting={isDeleting}
+      />
+
+      <TagFormModal
+        isOpen={isMergeModalOpen}
+        title={t('action.merge')}
+        description={t('form.mergeHint', { count: selectedTagIds.length })}
+        initialName={mergeName}
+        placeholder={t('form.mergePlaceholder')}
+        onConfirm={(value) => handleConfirmMerge(value)}
+        onCancel={handleCancelMerge}
+        confirmLabel={t('action.mergeConfirm')}
+        isSubmitting={isMerging}
       />
     </div>
   )

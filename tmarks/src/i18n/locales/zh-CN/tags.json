@@ -30,6 +30,9 @@
     "edit": "编辑标签",
     "delete": "删除标签",
     "deleting": "删除中...",
+    "merge": "合并",
+    "merging": "合并中...",
+    "mergeConfirm": "确认合并",
     "batchDelete": "批量删除",
     "batchDeleting": "删除中...",
     "save": "保存",
@@ -40,7 +43,9 @@
     "placeholder": "输入标签名称...",
     "namePlaceholder": "输入标签名称",
     "nameLabel": "标签名称",
-    "editHint": "调整标签名称，仅影响当前标签。"
+    "editHint": "调整标签名称，仅影响当前标签。",
+    "mergeHint": "将已选择的 {{count}} 个标签合并为一个标签，并同步更新关联书签。",
+    "mergePlaceholder": "输入合并后的标签名称"
   },
   "manage": {
     "title": "标签管理",
@@ -65,7 +70,9 @@
     "deleteSuccess": "标签已成功删除",
     "deleteFailed": "删除失败，请重试",
     "batchDeleteSuccess": "已成功删除 {{count}} 个标签",
-    "batchDeleteFailed": "批量删除失败，请重试"
+    "batchDeleteFailed": "批量删除失败，请重试",
+    "mergeSuccess": "已成功合并 {{count}} 个标签",
+    "mergeFailed": "合并失败，请重试"
   },
   "status": {
     "loading": "加载中..."

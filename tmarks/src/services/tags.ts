@@ -3,6 +3,8 @@ import type {
   BatchDeleteTagsRequest,
   BatchDeleteTagsResponse,
   CreateTagRequest,
+  MergeTagsRequest,
+  MergeTagsResponse,
   Tag,
   TagQueryParams,
   TagsResponse,
@@ -39,6 +41,11 @@ export const tagsService = {
   async deleteTags(ids: string[]) {
     const payload: BatchDeleteTagsRequest = { tag_ids: ids }
     const response = await apiClient.post<BatchDeleteTagsResponse>('/tags/bulk-delete', payload)
+    return response.data!
+  },
+
+  async mergeTags(data: MergeTagsRequest) {
+    const response = await apiClient.post<MergeTagsResponse>('/tags/merge', data)
     return response.data!
   },
 
