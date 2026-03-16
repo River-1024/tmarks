@@ -7,6 +7,7 @@ import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env, RouteParams } from '../../../../lib/types'
 import { success, badRequest, internalError } from '../../../../lib/response'
 import { requireAuth, AuthContext } from '../../../../middleware/auth'
+import { writeAuditLog } from '../../../../lib/audit-log'
 
 // AI 服务商类型
 type AIProvider = 'openai' | 'claude' | 'deepseek' | 'zhipu' | 'modelscope' | 'siliconflow' | 'iflow' | 'custom'
@@ -169,6 +170,8 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
     try {
       const userId = context.data.user_id
       const body = await context.request.json() as UpdateAISettingsRequest
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
 
       const tableExists = await hasAISettingsTable(context.env.DB)
       if (!tableExists) {
@@ -241,6 +244,16 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
         apiUrlsJson = Object.keys(existingUrls).length > 0 ? JSON.stringify(existingUrls) : null
       }
 
+      const nextProvider = body.provider ?? existing?.provider ?? 'openai'
+      const nextModel = body.model !== undefined ? body.model : existing?.model ?? null
+      const nextCustomPrompt =
+        body.custom_prompt !== undefined ? body.custom_prompt : existing?.custom_prompt ?? null
+      const nextEnableCustomPrompt =
+        body.enable_custom_prompt !== undefined
+          ? body.enable_custom_prompt
+          : existing?.enable_custom_prompt === 1
+      const nextEnabled = body.enabled !== undefined ? body.enabled : existing?.enabled === 1
+
       if (existing) {
         await context.env.DB.prepare(`
           UPDATE ai_settings SET
@@ -254,13 +267,13 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
             updated_at = ?
           WHERE user_id = ?
         `).bind(
-          body.provider ?? existing.provider,
+          nextProvider,
           apiKeysStored,
           apiUrlsJson,
-          body.model !== undefined ? body.model : existing.model,
-          body.custom_prompt !== undefined ? body.custom_prompt : existing.custom_prompt,
-          body.enable_custom_prompt !== undefined ? (body.enable_custom_prompt ? 1 : 0) : existing.enable_custom_prompt,
-          body.enabled !== undefined ? (body.enabled ? 1 : 0) : existing.enabled,
+          nextModel,
+          nextCustomPrompt,
+          nextEnableCustomPrompt ? 1 : 0,
+          nextEnabled ? 1 : 0,
           now,
           userId
         ).run()
@@ -274,17 +287,34 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
         `).bind(
           id,
           userId,
-          body.provider ?? 'openai',
+          nextProvider,
           apiKeysStored,
           apiUrlsJson,
-          body.model ?? null,
-          body.custom_prompt ?? null,
-          body.enable_custom_prompt ? 1 : 0,
-          body.enabled ? 1 : 0,
+          nextModel,
+          nextCustomPrompt,
+          nextEnableCustomPrompt ? 1 : 0,
+          nextEnabled ? 1 : 0,
           now,
           now
         ).run()
       }
+
+      const apiUrls = parseApiUrls(apiUrlsJson)
+      await writeAuditLog(context.env.DB, {
+        userId,
+        eventType: 'settings.ai.updated',
+        ip,
+        userAgent,
+        payload: {
+          provider: nextProvider,
+          model: nextModel,
+          enabled: nextEnabled,
+          enable_custom_prompt: nextEnableCustomPrompt,
+          custom_prompt_length: nextCustomPrompt?.length ?? 0,
+          api_url: apiUrls[nextProvider] || null,
+          api_key_updated: Boolean(body.api_keys && nextProvider in body.api_keys),
+        },
+      })
 
       return success({
         message: 'AI settings updated successfully'

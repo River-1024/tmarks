@@ -76,7 +76,7 @@ export function SettingsTabs({ tabs, activeTab, onTabChange, children }: Setting
       </div>
 
       {/* 标签页内容 */}
-      <div className="animate-in fade-in duration-200">{children}</div>
+      <div key={activeTab} className="animate-in fade-in duration-200">{children}</div>
     </div>
   )
 }

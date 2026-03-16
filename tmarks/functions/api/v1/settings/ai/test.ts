@@ -7,6 +7,7 @@ import type { PagesFunction } from '@cloudflare/workers-types'
 import type { Env, RouteParams } from '../../../../lib/types'
 import { success, badRequest, internalError } from '../../../../lib/response'
 import { requireAuth, AuthContext } from '../../../../middleware/auth'
+import { writeAuditLog } from '../../../../lib/audit-log'
 
 // AI 服务商类型
 type AIProvider = 'openai' | 'claude' | 'deepseek' | 'zhipu' | 'modelscope' | 'siliconflow' | 'iflow' | 'custom'
@@ -143,7 +144,10 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
   requireAuth,
   async (context) => {
     try {
+      const userId = context.data.user_id
       const body = await context.request.json() as TestAIRequest
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
       
       // 验证必填字段
       if (!body.provider) {
@@ -173,6 +177,25 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
       
       if (result.success) {
+        await writeAuditLog(context.env.DB, {
+          userId,
+          eventType: 'settings.ai.test_connection',
+          ip,
+          userAgent,
+          payload: {
+            request: {
+              provider,
+              api_url: apiUrl,
+              model,
+              has_api_key: Boolean(apiKey),
+            },
+            response: {
+              success: true,
+              latency_ms: result.latency,
+            },
+          },
+        })
+
         return success({
           success: true,
           provider,
@@ -180,6 +203,26 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
           latency_ms: result.latency
         })
       } else {
+        await writeAuditLog(context.env.DB, {
+          userId,
+          eventType: 'settings.ai.test_connection',
+          ip,
+          userAgent,
+          payload: {
+            request: {
+              provider,
+              api_url: apiUrl,
+              model,
+              has_api_key: Boolean(apiKey),
+            },
+            response: {
+              success: false,
+              latency_ms: result.latency,
+              error: result.error,
+            },
+          },
+        })
+
         return success({
           success: false,
           provider,

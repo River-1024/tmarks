@@ -11,6 +11,7 @@
     "api": "API",
     "share": "分享",
     "data": "数据",
+    "logs": "日志",
     "statistics": "数据分析",
     "language": "语言"
   },
@@ -351,6 +352,35 @@
       "tip2": "删除 R2 文件不存在的数据库记录",
       "tip3": "自动更新书签的快照计数",
       "tip4": "适用于手动删除 R2 文件后的数据修复"
+    }
+  },
+  "logs": {
+    "title": "操作日志",
+    "description": "查看提交操作记录，并配置日志保留策略",
+    "enable": "启用操作日志",
+    "enableHint": "记录提交、批量操作、AI 测试等关键操作",
+    "retentionDays": "日志保存时间（天）",
+    "retentionHint": "超过该时间的日志会自动清理",
+    "maxEntries": "日志最大数量",
+    "maxEntriesHint": "超出上限后会自动删除更早的记录",
+    "currentCount": "当前共 {{count}} 条日志",
+    "refresh": "刷新",
+    "clear": "手动清空",
+    "clearTitle": "清空日志",
+    "clearMessage": "确定要清空当前账户的全部操作日志吗？该操作不可恢复。",
+    "clearSuccess": "操作日志已清空",
+    "clearFailed": "清空日志失败",
+    "recordsTitle": "最近记录",
+    "recordsDescription": "包含提交记录、原始 AI 请求/响应及关键操作上下文",
+    "loading": "日志加载中...",
+    "empty": "暂无日志记录",
+    "ip": "IP",
+    "userAgent": "设备",
+    "infoBox": {
+      "title": "日志说明",
+      "tip1": "AI 测试连接会记录请求摘要与响应结果，不会明文展示 API Key",
+      "tip2": "批量提交操作会记录原始提交内容与处理结果，便于排查问题",
+      "tip3": "保存时间和最大数量同时生效，任一条件触发都会自动清理旧日志"
     }
   },
   "browser": {

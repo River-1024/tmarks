@@ -11,6 +11,7 @@ import { requireApiKeyAuth, ApiKeyAuthContext } from '../../../../middleware/api
 import { isValidUrl, sanitizeString } from '../../../../lib/validation'
 import { generateUUID } from '../../../../lib/crypto'
 import { invalidatePublicShareCache } from '../../../shared/cache'
+import { writeAuditLog } from '../../../../lib/audit-log'
 
 interface BatchCreateBookmarkItem {
   title: string
@@ -74,6 +75,8 @@ export const onRequestPost: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[]
   requireApiKeyAuth('bookmarks.create'),
   async (context) => {
     const userId = context.data.user_id
+    const ip = context.request.headers.get('CF-Connecting-IP')
+    const userAgent = context.request.headers.get('User-Agent')
 
     try {
       const body = (await context.request.json()) as BatchCreateRequest
@@ -246,17 +249,33 @@ export const onRequestPost: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[]
       }
 
       // 审计日志
-      await context.env.DB.prepare(
-        `INSERT INTO audit_logs (user_id, event_type, payload, created_at)
-         VALUES (?, 'batch_create_bookmarks', ?, datetime('now'))`
-      )
-        .bind(userId, JSON.stringify({ 
+      await writeAuditLog(context.env.DB, {
+        userId,
+        eventType: 'batch_create_bookmarks',
+        ip,
+        userAgent,
+        payload: {
+          request: {
+            total: body.bookmarks.length,
+            bookmarks: body.bookmarks.map((item) => ({
+              title: item.title,
+              url: item.url,
+              description: item.description || null,
+              tags: item.tags || [],
+              is_pinned: Boolean(item.is_pinned),
+              is_archived: Boolean(item.is_archived),
+              is_public: Boolean(item.is_public),
+            })),
+          },
+          response: {
           total: result.total,
           success: result.success,
           failed: result.failed,
-          skipped: result.skipped
-        }))
-        .run()
+            skipped: result.skipped,
+            errors: result.errors || [],
+          },
+        },
+      })
 
       // 清除缓存
       await invalidatePublicShareCache(context.env, userId)

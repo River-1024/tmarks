@@ -7,6 +7,7 @@ import {
   Camera,
   Chrome,
   Database,
+  History,
   Key,
   LogOut,
   RotateCcw,
@@ -29,6 +30,7 @@ import { BrowserSettingsTab } from '@/components/settings/tabs/BrowserSettingsTa
 import { ApiSettingsTab } from '@/components/settings/tabs/ApiSettingsTab'
 import { ShareSettingsTab } from '@/components/settings/tabs/ShareSettingsTab'
 import { DataSettingsTab } from '@/components/settings/tabs/DataSettingsTab'
+import { LogsSettingsTab } from '@/components/settings/tabs/LogsSettingsTab'
 import { BookmarkStatisticsPage } from '@/pages/bookmarks/BookmarkStatisticsPage'
 
 const TAB_IDS = [
@@ -40,6 +42,7 @@ const TAB_IDS = [
   'api',
   'share',
   'data',
+  'logs',
   'statistics',
 ] as const
 
@@ -65,10 +68,9 @@ export function GeneralSettingsPage() {
   const { user, logout } = useAuthStore()
   const { addToast } = useToastStore()
 
-  const initialTab: TabId = isValidTab(searchParams.get('tab'))
+  const activeTab: TabId = isValidTab(searchParams.get('tab'))
     ? (searchParams.get('tab') as TabId)
     : 'basic'
-  const [activeTab, setActiveTab] = useState<TabId>(initialTab)
   const [localPreferences, setLocalPreferences] = useState<UserPreferences | null>(null)
   const [tabActions, setTabActions] = useState<TabActions | null>(null)
 
@@ -79,13 +81,6 @@ export function GeneralSettingsPage() {
   }, [preferences])
 
   useEffect(() => {
-    const tab = searchParams.get('tab')
-    if (isValidTab(tab) && tab !== activeTab) {
-      setActiveTab(tab)
-    }
-  }, [searchParams, activeTab])
-
-  useEffect(() => {
     if (activeTab !== 'ai') {
       setTabActions(null)
     }
@@ -94,7 +89,6 @@ export function GeneralSettingsPage() {
   const handleTabChange = (tabId: string) => {
     if (!isValidTab(tabId)) return
 
-    setActiveTab(tabId)
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('tab', tabId)
     setSearchParams(nextParams, { replace: true })
@@ -135,6 +129,9 @@ export function GeneralSettingsPage() {
         snapshot_auto_create: localPreferences.snapshot_auto_create,
         snapshot_auto_dedupe: localPreferences.snapshot_auto_dedupe,
         snapshot_auto_cleanup_days: localPreferences.snapshot_auto_cleanup_days,
+        enable_operation_logging: localPreferences.enable_operation_logging,
+        operation_log_retention_days: localPreferences.operation_log_retention_days,
+        operation_log_max_entries: localPreferences.operation_log_max_entries,
       })
       addToast('success', t('message.saveSuccess'))
     } catch (error) {
@@ -181,6 +178,7 @@ export function GeneralSettingsPage() {
       { id: 'api', label: t('tabs.api'), icon: <Key className="w-4 h-4" /> },
       { id: 'share', label: t('tabs.share'), icon: <Share2 className="w-4 h-4" /> },
       { id: 'data', label: t('tabs.data'), icon: <Database className="w-4 h-4" /> },
+      { id: 'logs', label: t('tabs.logs'), icon: <History className="w-4 h-4" /> },
       { id: 'statistics', label: t('tabs.statistics'), icon: <BarChart3 className="w-4 h-4" /> },
     ],
     [t]
@@ -284,8 +282,12 @@ export function GeneralSettingsPage() {
 
           {activeTab === 'data' && <DataSettingsTab />}
 
+          {activeTab === 'logs' && (
+            <LogsSettingsTab preferences={localPreferences} onUpdate={handleUpdate} />
+          )}
+
           {activeTab === 'statistics' && (
-            <div className="-m-3 sm:-m-6 p-3 sm:p-6">
+            <div key={activeTab} className="-m-3 sm:-m-6 p-3 sm:p-6">
               <BookmarkStatisticsPage embedded />
             </div>
           )}

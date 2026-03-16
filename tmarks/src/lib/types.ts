@@ -173,6 +173,9 @@ export interface UserPreferences {
   snapshot_auto_create: boolean
   snapshot_auto_dedupe: boolean
   snapshot_auto_cleanup_days: number
+  enable_operation_logging: boolean
+  operation_log_retention_days: number
+  operation_log_max_entries: number
   updated_at: string
 }
 
@@ -204,6 +207,9 @@ export interface UpdatePreferencesRequest {
   snapshot_auto_create?: boolean
   snapshot_auto_dedupe?: boolean
   snapshot_auto_cleanup_days?: number
+  enable_operation_logging?: boolean
+  operation_log_retention_days?: number
+  operation_log_max_entries?: number
   
   // 5. 动画和性能相关
   enable_animations?: boolean
@@ -452,4 +458,19 @@ export interface StatisticsResponse {
   }
   top_domains: DomainCount[]
   group_size_distribution: GroupSizeDistribution[]
+}
+
+export interface OperationLogEntry {
+  id: number
+  event_type: string
+  payload: unknown
+  payload_raw: string | null
+  ip: string | null
+  user_agent: string | null
+  created_at: string
+}
+
+export interface OperationLogsResponse {
+  logs: OperationLogEntry[]
+  total: number
 }

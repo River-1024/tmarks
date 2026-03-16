@@ -70,6 +70,9 @@ function getDefaultPreferences(): UserPreferences {
     snapshot_auto_create: false,
     snapshot_auto_dedupe: true,
     snapshot_auto_cleanup_days: 0,
+    enable_operation_logging: true,
+    operation_log_retention_days: 30,
+    operation_log_max_entries: 1000,
     updated_at: new Date().toISOString(),
   }
 }

@@ -11,6 +11,7 @@
     "api": "API",
     "share": "Share",
     "data": "Data",
+    "logs": "Logs",
     "statistics": "Statistics",
     "language": "Language"
   },
@@ -351,6 +352,35 @@
       "tip2": "Delete database records for non-existent R2 files",
       "tip3": "Automatically update bookmark snapshot counts",
       "tip4": "Useful for data repair after manually deleting R2 files"
+    }
+  },
+  "logs": {
+    "title": "Operation Logs",
+    "description": "Review submission history and configure log retention",
+    "enable": "Enable operation logs",
+    "enableHint": "Record submissions, batch actions, AI tests, and other key operations",
+    "retentionDays": "Retention time (days)",
+    "retentionHint": "Logs older than this will be cleaned up automatically",
+    "maxEntries": "Maximum log entries",
+    "maxEntriesHint": "Older records are removed automatically after the limit is reached",
+    "currentCount": "{{count}} logs currently stored",
+    "refresh": "Refresh",
+    "clear": "Clear now",
+    "clearTitle": "Clear logs",
+    "clearMessage": "Are you sure you want to clear all operation logs for this account? This cannot be undone.",
+    "clearSuccess": "Operation logs cleared",
+    "clearFailed": "Failed to clear logs",
+    "recordsTitle": "Recent records",
+    "recordsDescription": "Includes submissions, original AI request/response details, and related context",
+    "loading": "Loading logs...",
+    "empty": "No logs yet",
+    "ip": "IP",
+    "userAgent": "Device",
+    "infoBox": {
+      "title": "About logs",
+      "tip1": "AI connection tests store request summaries and response results without exposing raw API keys",
+      "tip2": "Batch submissions store the original submitted payload and processing result for troubleshooting",
+      "tip3": "Retention days and maximum entries both apply, and old logs are cleaned automatically"
     }
   },
   "browser": {

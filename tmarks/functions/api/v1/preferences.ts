@@ -20,6 +20,9 @@ interface UserPreferences {
   snapshot_auto_create?: number
   snapshot_auto_dedupe?: number
   snapshot_auto_cleanup_days?: number
+  enable_operation_logging?: number
+  operation_log_retention_days?: number
+  operation_log_max_entries?: number
   updated_at: string
 }
 
@@ -39,6 +42,9 @@ interface UpdatePreferencesRequest {
   snapshot_auto_create?: boolean
   snapshot_auto_dedupe?: boolean
   snapshot_auto_cleanup_days?: number
+  enable_operation_logging?: boolean
+  operation_log_retention_days?: number
+  operation_log_max_entries?: number
 }
 
 async function hasTagLayoutColumn(db: D1Database): Promise<boolean> {
@@ -84,12 +90,60 @@ async function hasAutomationColumns(db: D1Database): Promise<boolean> {
   }
 }
 
+async function hasOperationLogColumns(db: D1Database): Promise<boolean> {
+  try {
+    await db
+      .prepare('SELECT enable_operation_logging FROM user_preferences LIMIT 1')
+      .first()
+    return true
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /no such column: enable_operation_logging/i.test(error.message)
+    ) {
+      return false
+    }
+    throw error
+  }
+}
+
+function serializePreferences(preferences: UserPreferences, operationLogSupported = true) {
+  return {
+    theme: preferences.theme,
+    page_size: preferences.page_size,
+    view_mode: preferences.view_mode,
+    density: preferences.density,
+    tag_layout: preferences.tag_layout ?? 'grid',
+    sort_by: preferences.sort_by ?? 'popular',
+    search_auto_clear_seconds: preferences.search_auto_clear_seconds ?? 15,
+    tag_selection_auto_clear_seconds: preferences.tag_selection_auto_clear_seconds ?? 30,
+    enable_search_auto_clear: preferences.enable_search_auto_clear === 1,
+    enable_tag_selection_auto_clear: preferences.enable_tag_selection_auto_clear === 1,
+    default_bookmark_icon: preferences.default_bookmark_icon ?? 'bookmark',
+    snapshot_retention_count: preferences.snapshot_retention_count ?? 5,
+    snapshot_auto_create: preferences.snapshot_auto_create === 1,
+    snapshot_auto_dedupe: preferences.snapshot_auto_dedupe === 1,
+    snapshot_auto_cleanup_days: preferences.snapshot_auto_cleanup_days ?? 0,
+    enable_operation_logging: operationLogSupported
+      ? preferences.enable_operation_logging !== 0
+      : true,
+    operation_log_retention_days: operationLogSupported
+      ? preferences.operation_log_retention_days ?? 30
+      : 30,
+    operation_log_max_entries: operationLogSupported
+      ? preferences.operation_log_max_entries ?? 1000
+      : 1000,
+    updated_at: preferences.updated_at,
+  }
+}
+
 // GET /api/v1/preferences - 获取用户偏好
 export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
   requireAuth,
   async (context) => {
     try {
       const userId = context.data.user_id
+      const operationLogSupported = await hasOperationLogColumns(context.env.DB)
 
       const preferences = await context.env.DB.prepare(
         'SELECT * FROM user_preferences WHERE user_id = ?'
@@ -102,24 +156,7 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       return success({
-        preferences: {
-          theme: preferences.theme,
-          page_size: preferences.page_size,
-          view_mode: preferences.view_mode,
-          density: preferences.density,
-          tag_layout: preferences.tag_layout ?? 'grid',
-          sort_by: preferences.sort_by ?? 'popular',
-          search_auto_clear_seconds: preferences.search_auto_clear_seconds ?? 15,
-          tag_selection_auto_clear_seconds: preferences.tag_selection_auto_clear_seconds ?? 30,
-          enable_search_auto_clear: preferences.enable_search_auto_clear === 1,
-          enable_tag_selection_auto_clear: preferences.enable_tag_selection_auto_clear === 1,
-          default_bookmark_icon: preferences.default_bookmark_icon ?? 'bookmark',
-          snapshot_retention_count: preferences.snapshot_retention_count ?? 5,
-          snapshot_auto_create: preferences.snapshot_auto_create === 1,
-          snapshot_auto_dedupe: preferences.snapshot_auto_dedupe === 1,
-          snapshot_auto_cleanup_days: preferences.snapshot_auto_cleanup_days ?? 0,
-          updated_at: preferences.updated_at,
-        },
+        preferences: serializePreferences(preferences, operationLogSupported),
       })
     } catch (error) {
       console.error('Get preferences error:', error)
@@ -138,6 +175,7 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
       const tagLayoutSupported = await hasTagLayoutColumn(context.env.DB)
       const sortBySupported = await hasSortByColumn(context.env.DB)
       const automationSupported = await hasAutomationColumns(context.env.DB)
+      const operationLogSupported = await hasOperationLogColumns(context.env.DB)
 
       // 验证输入
       if (body.theme && !['light', 'dark', 'system'].includes(body.theme)) {
@@ -188,6 +226,14 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
 
       if (body.snapshot_auto_cleanup_days !== undefined && (body.snapshot_auto_cleanup_days < 0 || body.snapshot_auto_cleanup_days > 365)) {
         return badRequest('Snapshot auto cleanup days must be between 0 and 365')
+      }
+
+      if (body.operation_log_retention_days !== undefined && (body.operation_log_retention_days < 1 || body.operation_log_retention_days > 365)) {
+        return badRequest('Operation log retention days must be between 1 and 365')
+      }
+
+      if (body.operation_log_max_entries !== undefined && (body.operation_log_max_entries < 100 || body.operation_log_max_entries > 10000)) {
+        return badRequest('Operation log max entries must be between 100 and 10000')
       }
 
       // 确保当前用户在 user_preferences 表中有一条记录；
@@ -283,9 +329,32 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
         }
       }
 
+      if (operationLogSupported) {
+        if (body.enable_operation_logging !== undefined) {
+          updates.push('enable_operation_logging = ?')
+          values.push(body.enable_operation_logging ? 1 : 0)
+        }
+
+        if (body.operation_log_retention_days !== undefined) {
+          updates.push('operation_log_retention_days = ?')
+          values.push(body.operation_log_retention_days)
+        }
+
+        if (body.operation_log_max_entries !== undefined) {
+          updates.push('operation_log_max_entries = ?')
+          values.push(body.operation_log_max_entries)
+        }
+      }
+
       if (updates.length === 0) {
         if ((body.tag_layout !== undefined && !tagLayoutSupported) ||
-            (body.sort_by !== undefined && !sortBySupported)) {
+            (body.sort_by !== undefined && !sortBySupported) ||
+            (
+              (body.enable_operation_logging !== undefined ||
+                body.operation_log_retention_days !== undefined ||
+                body.operation_log_max_entries !== undefined) &&
+              !operationLogSupported
+            )) {
           const preferences = await context.env.DB.prepare(
             'SELECT * FROM user_preferences WHERE user_id = ?'
           )
@@ -297,24 +366,7 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
           }
 
           return success({
-            preferences: {
-              theme: preferences.theme,
-              page_size: preferences.page_size,
-              view_mode: preferences.view_mode,
-              density: preferences.density,
-              tag_layout: preferences.tag_layout ?? 'grid',
-              sort_by: preferences.sort_by ?? 'popular',
-              search_auto_clear_seconds: preferences.search_auto_clear_seconds ?? 15,
-              tag_selection_auto_clear_seconds: preferences.tag_selection_auto_clear_seconds ?? 30,
-              enable_search_auto_clear: preferences.enable_search_auto_clear === 1,
-              enable_tag_selection_auto_clear: preferences.enable_tag_selection_auto_clear === 1,
-              default_bookmark_icon: preferences.default_bookmark_icon ?? 'bookmark',
-              snapshot_retention_count: preferences.snapshot_retention_count ?? 5,
-              snapshot_auto_create: preferences.snapshot_auto_create === 1,
-              snapshot_auto_dedupe: preferences.snapshot_auto_dedupe === 1,
-              snapshot_auto_cleanup_days: preferences.snapshot_auto_cleanup_days ?? 0,
-              updated_at: preferences.updated_at,
-            },
+            preferences: serializePreferences(preferences, operationLogSupported),
           })
         }
 
@@ -346,24 +398,7 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       return success({
-        preferences: {
-          theme: preferences.theme,
-          page_size: preferences.page_size,
-          view_mode: preferences.view_mode,
-          density: preferences.density,
-          tag_layout: preferences.tag_layout ?? 'grid',
-          sort_by: preferences.sort_by ?? 'popular',
-          search_auto_clear_seconds: preferences.search_auto_clear_seconds ?? 15,
-          tag_selection_auto_clear_seconds: preferences.tag_selection_auto_clear_seconds ?? 30,
-          enable_search_auto_clear: preferences.enable_search_auto_clear === 1,
-          enable_tag_selection_auto_clear: preferences.enable_tag_selection_auto_clear === 1,
-          default_bookmark_icon: preferences.default_bookmark_icon ?? 'bookmark',
-          snapshot_retention_count: preferences.snapshot_retention_count ?? 5,
-          snapshot_auto_create: preferences.snapshot_auto_create === 1,
-          snapshot_auto_dedupe: preferences.snapshot_auto_dedupe === 1,
-          snapshot_auto_cleanup_days: preferences.snapshot_auto_cleanup_days ?? 0,
-          updated_at: preferences.updated_at,
-        },
+        preferences: serializePreferences(preferences, operationLogSupported),
       })
     } catch (error) {
       console.error('Update preferences error:', error)

@@ -4,6 +4,7 @@ import { requireAuth, type AuthContext } from '../../../middleware/auth'
 import { invalidatePublicShareCache } from '../../shared/cache'
 import { CacheService } from '../../../lib/cache'
 import { createBookmarkCacheManager } from '../../../lib/cache/bookmark-cache'
+import { writeAuditLog } from '../../../lib/audit-log'
 
 // Batch action types
 type BatchActionType = 'delete' | 'update_tags' | 'pin' | 'unpin' | 'archive' | 'unarchive'
@@ -30,6 +31,8 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
   requireAuth,
   async (context) => {
     const userId = context.data.user_id
+    const ip = context.request.headers.get('CF-Connecting-IP')
+    const userAgent = context.request.headers.get('User-Agent')
 
     let body: BatchActionRequest | null = null
     try {
@@ -79,13 +82,13 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
         affectedCount = result.meta.changes || 0
 
         // Audit log
-        await db
-          .prepare(
-            `INSERT INTO audit_logs (user_id, event_type, payload, created_at)
-             VALUES (?, 'batch_delete_bookmarks', ?, datetime('now'))`
-          )
-          .bind(userId, JSON.stringify({ bookmark_ids, count: affectedCount }))
-          .run()
+        await writeAuditLog(db, {
+          userId,
+          eventType: 'batch_delete_bookmarks',
+          ip,
+          userAgent,
+          payload: { bookmark_ids, count: affectedCount },
+        })
 
         break
       }
@@ -236,16 +239,13 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
         affectedCount = validBookmarkIds.length
 
         // Audit log
-        await db
-          .prepare(
-            `INSERT INTO audit_logs (user_id, event_type, payload, created_at)
-             VALUES (?, 'batch_update_tags', ?, datetime('now'))`
-          )
-          .bind(
-            userId,
-            JSON.stringify({ bookmark_ids: validBookmarkIds, add_tag_ids, remove_tag_ids })
-          )
-          .run()
+        await writeAuditLog(db, {
+          userId,
+          eventType: 'batch_update_tags',
+          ip,
+          userAgent,
+          payload: { bookmark_ids: validBookmarkIds, add_tag_ids, remove_tag_ids },
+        })
 
         break
       }
