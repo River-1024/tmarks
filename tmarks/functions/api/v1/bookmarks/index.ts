@@ -12,6 +12,7 @@ import { createBookmarkCacheManager } from '../../../lib/cache/bookmark-cache'
 import type { QueryParams } from '../../../lib/cache/types'
 import { createOrLinkTags } from '../../../lib/tags'
 import { uploadCoverImageToR2 } from '../../../lib/image-upload'
+import { writeAuditLog } from '../../../lib/audit-log'
 
 interface CreateBookmarkRequest {
   title: string
@@ -19,8 +20,8 @@ interface CreateBookmarkRequest {
   description?: string
   cover_image?: string
   favicon?: string
-  tag_ids?: string[]  // 兼容旧版：标签 ID 数组
-  tags?: string[]     // 新版：标签名称数组（推荐）
+  tag_ids?: string[] // 兼容旧版：标签 ID 数组
+  tags?: string[] // 新版：标签名称数组（推荐）
   is_pinned?: boolean
   is_public?: boolean
 }
@@ -93,14 +94,14 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
       if (tagIds.length > 0) {
         const now = new Date().toISOString()
         Promise.all(
-          tagIds.map(tagId =>
+          tagIds.map((tagId) =>
             context.env.DB.prepare(
               'UPDATE tags SET click_count = click_count + 1, last_clicked_at = ?, updated_at = ? WHERE id = ? AND user_id = ?'
             )
               .bind(now, now, tagId, userId)
               .run()
           )
-        ).catch(err => console.error('Failed to record tag clicks:', err))
+        ).catch((err) => console.error('Failed to record tag clicks:', err))
       }
 
       // 构建查询条件（不包含占位符的参数值）
@@ -125,9 +126,15 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
             // (is_pinned < ?) OR (is_pinned = ? AND (updated_at < ? OR (updated_at = ? AND id < ?)))
             conditions.push(
               '((b.is_pinned < ?) OR ' +
-              '(b.is_pinned = ? AND (b.updated_at < ? OR (b.updated_at = ? AND b.id < ?))))'
+                '(b.is_pinned = ? AND (b.updated_at < ? OR (b.updated_at = ? AND b.id < ?))))'
             )
-            conditionParams.push(cursorIsPinned, cursorIsPinned, cursorSortValue, cursorSortValue, cursorId)
+            conditionParams.push(
+              cursorIsPinned,
+              cursorIsPinned,
+              cursorSortValue,
+              cursorSortValue,
+              cursorId
+            )
             break
           case 'popular':
             // 四字段游标：isPinned|click_count|last_clicked_at|id
@@ -138,32 +145,39 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
                 // last_clicked_at 为 NULL 的情况
                 conditions.push(
                   '((b.is_pinned < ?) OR ' +
-                  '(b.is_pinned = ? AND (' +
+                    '(b.is_pinned = ? AND (' +
                     '(b.click_count < ?) OR ' +
                     '(b.click_count = ? AND (b.last_clicked_at IS NOT NULL OR (b.last_clicked_at IS NULL AND b.id < ?)))' +
-                  ')))'
+                    ')))'
                 )
                 conditionParams.push(
-                  cursorIsPinned, cursorIsPinned,
-                  cursorSortValue, cursorSortValue, cursorId
+                  cursorIsPinned,
+                  cursorIsPinned,
+                  cursorSortValue,
+                  cursorSortValue,
+                  cursorId
                 )
               } else {
                 // last_clicked_at 有值的情况
                 conditions.push(
                   '((b.is_pinned < ?) OR ' +
-                  '(b.is_pinned = ? AND (' +
+                    '(b.is_pinned = ? AND (' +
                     '(b.click_count < ?) OR ' +
                     '(b.click_count = ? AND (' +
-                      '(b.last_clicked_at IS NULL) OR ' +
-                      '(b.last_clicked_at < ?) OR ' +
-                      '(b.last_clicked_at = ? AND b.id < ?)' +
+                    '(b.last_clicked_at IS NULL) OR ' +
+                    '(b.last_clicked_at < ?) OR ' +
+                    '(b.last_clicked_at = ? AND b.id < ?)' +
                     '))' +
-                  ')))'
+                    ')))'
                 )
                 conditionParams.push(
-                  cursorIsPinned, cursorIsPinned,
-                  cursorSortValue, cursorSortValue,
-                  cursorSortValue2, cursorSortValue2, cursorId
+                  cursorIsPinned,
+                  cursorIsPinned,
+                  cursorSortValue,
+                  cursorSortValue,
+                  cursorSortValue2,
+                  cursorSortValue2,
+                  cursorId
                 )
               }
             }
@@ -174,9 +188,15 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
             // (is_pinned < ?) OR (is_pinned = ? AND (created_at < ? OR (created_at = ? AND id < ?)))
             conditions.push(
               '((b.is_pinned < ?) OR ' +
-              '(b.is_pinned = ? AND (b.created_at < ? OR (b.created_at = ? AND b.id < ?))))'
+                '(b.is_pinned = ? AND (b.created_at < ? OR (b.created_at = ? AND b.id < ?))))'
             )
-            conditionParams.push(cursorIsPinned, cursorIsPinned, cursorSortValue, cursorSortValue, cursorId)
+            conditionParams.push(
+              cursorIsPinned,
+              cursorIsPinned,
+              cursorSortValue,
+              cursorSortValue,
+              cursorId
+            )
             break
         }
       }
@@ -215,17 +235,21 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
       let orderBy = ''
       switch (sortBy) {
         case 'updated':
-          orderBy = 'ORDER BY b.is_pinned DESC, CASE WHEN b.is_pinned = 1 THEN b.pin_order ELSE NULL END ASC, b.updated_at DESC, b.id DESC'
+          orderBy =
+            'ORDER BY b.is_pinned DESC, CASE WHEN b.is_pinned = 1 THEN b.pin_order ELSE NULL END ASC, b.updated_at DESC, b.id DESC'
           break
         case 'pinned':
-          orderBy = 'ORDER BY b.is_pinned DESC, CASE WHEN b.is_pinned = 1 THEN b.pin_order ELSE NULL END ASC, b.created_at DESC, b.id DESC'
+          orderBy =
+            'ORDER BY b.is_pinned DESC, CASE WHEN b.is_pinned = 1 THEN b.pin_order ELSE NULL END ASC, b.created_at DESC, b.id DESC'
           break
         case 'popular':
-          orderBy = 'ORDER BY b.is_pinned DESC, CASE WHEN b.is_pinned = 1 THEN b.pin_order ELSE NULL END ASC, b.click_count DESC, b.last_clicked_at DESC, b.id DESC'
+          orderBy =
+            'ORDER BY b.is_pinned DESC, CASE WHEN b.is_pinned = 1 THEN b.pin_order ELSE NULL END ASC, b.click_count DESC, b.last_clicked_at DESC, b.id DESC'
           break
         case 'created':
         default:
-          orderBy = 'ORDER BY b.is_pinned DESC, CASE WHEN b.is_pinned = 1 THEN b.pin_order ELSE NULL END ASC, b.created_at DESC, b.id DESC'
+          orderBy =
+            'ORDER BY b.is_pinned DESC, CASE WHEN b.is_pinned = 1 THEN b.pin_order ELSE NULL END ASC, b.created_at DESC, b.id DESC'
           break
       }
 
@@ -233,10 +257,14 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
       params.push(pageSize + 1) // 多获取一条以判断是否有下一页
 
       // 执行查询
-      const { results } = await context.env.DB.prepare(query).bind(...params).all<BookmarkRow>()
+      const { results } = await context.env.DB.prepare(query)
+        .bind(...params)
+        .all<BookmarkRow>()
 
       // 调试日志
-      console.log(`[Bookmarks V1 API] User: ${userId}, Query returned: ${results.length} bookmarks, pageSize: ${pageSize}`)
+      console.log(
+        `[Bookmarks V1 API] User: ${userId}, Query returned: ${results.length} bookmarks, pageSize: ${pageSize}`
+      )
 
       // 判断是否有下一页
       const hasMore = results.length > pageSize
@@ -265,10 +293,11 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       // 优化：使用单次查询获取所有书签的标签
-      const bookmarkIds = bookmarks.map(b => b.id)
+      const bookmarkIds = bookmarks.map((b) => b.id)
 
       // 一次性获取所有书签的标签
-      let allTags: Array<{ bookmark_id: string; id: string; name: string; color: string | null }> = []
+      let allTags: Array<{ bookmark_id: string; id: string; name: string; color: string | null }> =
+        []
 
       if (bookmarkIds.length > 0) {
         const placeholders = bookmarkIds.map(() => '?').join(',')
@@ -291,7 +320,10 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       // 将标签按书签ID分组
-      const tagsByBookmarkId = new Map<string, Array<{ id: string; name: string; color: string | null }>>()
+      const tagsByBookmarkId = new Map<
+        string,
+        Array<{ id: string; name: string; color: string | null }>
+      >()
       for (const tag of allTags || []) {
         if (!tagsByBookmarkId.has(tag.bookmark_id)) {
           tagsByBookmarkId.set(tag.bookmark_id, [])
@@ -308,7 +340,7 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
 
       // 一次性获取所有书签的快照数量
       const snapshotCounts = new Map<string, number>()
-      
+
       if (bookmarkIds.length > 0) {
         try {
           const placeholders = bookmarkIds.map(() => '?').join(',')
@@ -331,7 +363,7 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       // 组装书签和标签数据
-      const bookmarksWithTags: BookmarkWithTags[] = bookmarks.map(bookmark => ({
+      const bookmarksWithTags: BookmarkWithTags[] = bookmarks.map((bookmark) => ({
         ...normalizeBookmark(bookmark),
         tags: tagsByBookmarkId.get(bookmark.id) || [],
         snapshot_count: snapshotCounts.get(bookmark.id) || 0,
@@ -361,7 +393,7 @@ export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
             .bind(...relatedParams)
             .all<{ id: string }>()
 
-          relatedTagIds = (relatedTags || []).map(t => t.id)
+          relatedTagIds = (relatedTags || []).map((t) => t.id)
         } catch (err) {
           console.error('Failed to fetch related tags:', err)
         }
@@ -395,7 +427,9 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
   async (context) => {
     try {
       const userId = context.data.user_id
-      const body = await context.request.json() as CreateBookmarkRequest
+      const body = (await context.request.json()) as CreateBookmarkRequest
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
 
       // 验证输入
       if (!body.title || !body.url) {
@@ -450,7 +484,7 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
 
       if (existing) {
         bookmarkId = existing.id
-        
+
         // 如果是未删除的书签
         if (!existing.deleted_at) {
           // 返回现有书签信息，让前端可以为其创建快照
@@ -578,6 +612,24 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
 
       if (body.is_public) {
         await invalidatePublicShareCache(context.env, userId)
+      }
+
+      if (!existing || existing.deleted_at) {
+        await writeAuditLog(context.env.DB, {
+          userId,
+          eventType: existing?.deleted_at ? 'bookmark.restored' : 'bookmark.created',
+          ip,
+          userAgent,
+          payload: {
+            bookmark_id: bookmarkId,
+            title: bookmarkRow.title,
+            url: bookmarkRow.url,
+            is_pinned: bookmarkRow.is_pinned === 1,
+            is_public: bookmarkRow.is_public === 1,
+            tag_count: tags?.length ?? 0,
+            restored_from_deleted: Boolean(existing?.deleted_at),
+          },
+        })
       }
 
       return created({

@@ -3,7 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { History, Trash2, Info, RefreshCw, Bug } from 'lucide-react'
 import { Toggle } from '@/components/common/Toggle'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
-import { useClearOperationLogs, useOperationLogs, useWriteOperationDebugLog } from '@/hooks/useOperationLogs'
+import {
+  useClearOperationLogs,
+  useOperationLogs,
+  useWriteOperationDebugLog,
+} from '@/hooks/useOperationLogs'
 import { useToastStore } from '@/stores/toastStore'
 import type { UserPreferences } from '@/lib/types'
 import { SettingsSection, SettingsItem, SettingsDivider } from '../SettingsSection'
@@ -16,7 +20,7 @@ interface LogsSettingsTabProps {
 }
 
 export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps) {
-  const { t } = useTranslation('settings')
+  const { t, i18n } = useTranslation('settings')
   const { addToast } = useToastStore()
   const clearLogs = useClearOperationLogs()
   const writeDebugLog = useWriteOperationDebugLog()
@@ -40,11 +44,12 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
       setLastDebugError(null)
       addToast('success', t('logs.debug.writeSuccess'))
     } catch (err) {
-      const message = err instanceof ApiError
-        ? `${err.message} (status=${err.status}, code=${err.code})`
-        : err instanceof Error
-          ? err.message
-          : t('logs.debug.writeFailed')
+      const message =
+        err instanceof ApiError
+          ? `${err.message} (status=${err.status}, code=${err.code})`
+          : err instanceof Error
+            ? err.message
+            : t('logs.debug.writeFailed')
       setLastDebugError(message)
       addToast('error', `${t('logs.debug.writeFailed')}: ${message}`)
     }
@@ -76,14 +81,18 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="p-4 rounded-lg bg-card border border-border space-y-2">
-              <label className="text-sm font-medium text-foreground">{t('logs.retentionDays')}</label>
+              <label className="text-sm font-medium text-foreground">
+                {t('logs.retentionDays')}
+              </label>
               <input
                 type="number"
                 min="1"
                 max="365"
                 value={preferences.operation_log_retention_days}
                 onChange={(e) =>
-                  onUpdate({ operation_log_retention_days: Math.max(1, Number(e.target.value) || 1) })
+                  onUpdate({
+                    operation_log_retention_days: Math.max(1, Number(e.target.value) || 1),
+                  })
                 }
                 className="input w-full"
               />
@@ -99,7 +108,9 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
                 step="100"
                 value={preferences.operation_log_max_entries}
                 onChange={(e) =>
-                  onUpdate({ operation_log_max_entries: Math.max(100, Number(e.target.value) || 100) })
+                  onUpdate({
+                    operation_log_max_entries: Math.max(100, Number(e.target.value) || 100),
+                  })
                 }
                 className="input w-full"
               />
@@ -111,7 +122,11 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
             <div className="text-sm text-muted-foreground">
               {t('logs.currentCount', { count: data?.total ?? 0 })}
             </div>
-            <button onClick={() => refetch()} disabled={isRefetching} className="btn btn-ghost btn-sm">
+            <button
+              onClick={() => refetch()}
+              disabled={isRefetching}
+              className="btn btn-ghost btn-sm"
+            >
               <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
               {t('logs.refresh')}
             </button>
@@ -129,20 +144,39 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
 
       <SettingsDivider />
 
-      <SettingsSection icon={Bug} title={t('logs.debug.title')} description={t('logs.debug.description')}>
+      <SettingsSection
+        icon={Bug}
+        title={t('logs.debug.title')}
+        description={t('logs.debug.description')}
+      >
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <DebugItem label={t('logs.debug.columnsSupported')} value={String(data?.debug?.operation_log_columns_supported ?? false)} />
-            <DebugItem label={t('logs.debug.preferencesFound')} value={String(data?.debug?.preferences_found ?? false)} />
-            <DebugItem label={t('logs.debug.loggingEnabled')} value={String(data?.debug?.effective_logging_enabled ?? false)} />
+            <DebugItem
+              label={t('logs.debug.columnsSupported')}
+              value={String(data?.debug?.operation_log_columns_supported ?? false)}
+            />
+            <DebugItem
+              label={t('logs.debug.preferencesFound')}
+              value={String(data?.debug?.preferences_found ?? false)}
+            />
+            <DebugItem
+              label={t('logs.debug.loggingEnabled')}
+              value={String(data?.debug?.effective_logging_enabled ?? false)}
+            />
             <DebugItem label={t('logs.debug.apiVersion')} value={data?.api_version || '-'} />
-            <DebugItem label={t('logs.debug.retentionDays')} value={String(data?.debug?.retention_days ?? '-')} />
-            <DebugItem label={t('logs.debug.maxEntries')} value={String(data?.debug?.max_entries ?? '-')} />
+            <DebugItem
+              label={t('logs.debug.retentionDays')}
+              value={String(data?.debug?.retention_days ?? '-')}
+            />
+            <DebugItem
+              label={t('logs.debug.maxEntries')}
+              value={String(data?.debug?.max_entries ?? '-')}
+            />
             <DebugItem
               label={t('logs.debug.latestLog')}
               value={
                 data?.debug?.latest_log
-                  ? `${data.debug.latest_log.event_type} @ ${data.debug.latest_log.created_at}`
+                  ? `${data.debug.latest_log.event_type} @ ${formatLogDateTime(data.debug.latest_log.created_at, i18n.language)}`
                   : t('logs.debug.none')
               }
             />
@@ -188,7 +222,8 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
           )}
 
           <div className="rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
-            {t('logs.debug.hint')}
+            <div>{t('logs.timezoneNote')}</div>
+            <div className="mt-2">{t('logs.debug.hint')}</div>
           </div>
         </div>
       </SettingsSection>
@@ -206,7 +241,9 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
               <div key={log.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm font-medium text-foreground">{log.event_type}</div>
-                  <div className="text-xs text-muted-foreground">{log.created_at}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatLogDateTime(log.created_at, i18n.language)}
+                  </div>
                 </div>
                 {(log.ip || log.user_agent) && (
                   <div className="text-xs text-muted-foreground break-all">
@@ -264,4 +301,50 @@ function formatPayload(payload: unknown) {
   } catch {
     return String(payload)
   }
+}
+
+const BEIJING_TIME_ZONE = 'Asia/Shanghai'
+
+function formatLogDateTime(value: string, locale: string) {
+  const date = parseLogDateTime(value)
+  if (!date) {
+    return value
+  }
+
+  const formatter = new Intl.DateTimeFormat(locale === 'zh-CN' ? 'zh-CN' : 'en-CA', {
+    timeZone: BEIJING_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+
+  const parts = formatter.formatToParts(date)
+  const values = Object.fromEntries(
+    parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])
+  )
+
+  return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}`
+}
+
+function parseLogDateTime(value: string) {
+  if (!value) {
+    return null
+  }
+
+  const normalized = /^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : hasTimezoneOffset(value)
+      ? value
+      : `${value}Z`
+
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function hasTimezoneOffset(value: string) {
+  return /[zZ]$|[+-][0-9]{2}:[0-9]{2}$/.test(value)
 }

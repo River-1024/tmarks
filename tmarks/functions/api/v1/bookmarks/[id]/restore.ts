@@ -9,6 +9,8 @@ import type { Env, BookmarkRow, RouteParams } from '../../../../lib/types'
 import { success, notFound, internalError } from '../../../../lib/response'
 import { requireAuth, AuthContext } from '../../../../middleware/auth'
 import { normalizeBookmark } from '../../../../lib/bookmark-utils'
+import { invalidatePublicShareCache } from '../../../shared/cache'
+import { writeAuditLog } from '../../../../lib/audit-log'
 
 // PATCH /api/v1/bookmarks/:id/restore - 从回收站恢复
 export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
@@ -16,6 +18,8 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
   async (context) => {
     const userId = context.data.user_id
     const bookmarkId = context.params.id
+    const ip = context.request.headers.get('CF-Connecting-IP')
+    const userAgent = context.request.headers.get('User-Agent')
 
     try {
       // 检查书签是否存在且已被软删除
@@ -39,9 +43,7 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
         .run()
 
       // 返回恢复后的书签
-      const bookmarkRow = await context.env.DB.prepare(
-        'SELECT * FROM bookmarks WHERE id = ?'
-      )
+      const bookmarkRow = await context.env.DB.prepare('SELECT * FROM bookmarks WHERE id = ?')
         .bind(bookmarkId)
         .first<BookmarkRow>()
 
@@ -58,6 +60,23 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
       )
         .bind(bookmarkId)
         .all<{ id: string; name: string; color: string | null }>()
+
+      await invalidatePublicShareCache(context.env, userId)
+
+      await writeAuditLog(context.env.DB, {
+        userId,
+        eventType: 'bookmark.restored',
+        ip,
+        userAgent,
+        payload: {
+          bookmark_id: bookmarkId,
+          title: bookmarkRow.title,
+          url: bookmarkRow.url,
+          is_pinned: bookmarkRow.is_pinned === 1,
+          is_public: bookmarkRow.is_public === 1,
+          tag_count: tags?.length ?? 0,
+        },
+      })
 
       return success({
         bookmark: {

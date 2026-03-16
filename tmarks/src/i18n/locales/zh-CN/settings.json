@@ -376,6 +376,7 @@
     "empty": "暂无日志记录",
     "ip": "IP",
     "userAgent": "设备",
+    "timezoneNote": "页面时间均按北京时间（UTC+8）显示",
     "debug": {
       "title": "日志调试",
       "description": "检查后端日志能力、当前配置以及手动写入测试日志",
@@ -394,7 +395,7 @@
       "fetchError": "读取诊断失败",
       "lastWriteError": "最近一次写入错误",
       "backendMissing": "后端没有返回诊断信息，通常表示服务端 Functions 还不是最新版本，或者当前日志接口没有成功部署。",
-      "hint": "如果“数据库已支持日志配置列”为 false，说明日志配置迁移还没跑，但现在依旧应该能写入基础日志。"
+      "hint": "如果“数据库已支持日志配置列”为 false，说明当前绑定的 D1 还没执行 0003_d1_console_operation_logs.sql；基础日志仍可写入，但日志开关和保留策略不会持久化。"
     },
     "infoBox": {
       "title": "日志说明",

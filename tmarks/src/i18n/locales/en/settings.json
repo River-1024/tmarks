@@ -376,6 +376,7 @@
     "empty": "No logs yet",
     "ip": "IP",
     "userAgent": "Device",
+    "timezoneNote": "All log times are shown in Beijing time (UTC+8)",
     "debug": {
       "title": "Log Diagnostics",
       "description": "Inspect backend logging capabilities, active config, and write a manual test log",
@@ -394,7 +395,7 @@
       "fetchError": "Failed to load diagnostics",
       "lastWriteError": "Last write error",
       "backendMissing": "The backend did not return diagnostics. This usually means the Functions deployment is not on the latest version, or the logs endpoint was not deployed successfully.",
-      "hint": "If “DB supports log config columns” is false, the migration has not been applied yet, but basic logs should still be writable now."
+      "hint": "If “DB supports log config columns” is false, the bound D1 database has not run 0003_d1_console_operation_logs.sql yet. Basic logs can still be written, but the toggle and retention settings will not persist."
     },
     "infoBox": {
       "title": "About logs",

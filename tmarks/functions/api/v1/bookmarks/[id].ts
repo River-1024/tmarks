@@ -5,6 +5,7 @@ import { requireAuth, AuthContext } from '../../../middleware/auth'
 import { isValidUrl, sanitizeString } from '../../../lib/validation'
 import { normalizeBookmark } from '../../../lib/bookmark-utils'
 import { invalidatePublicShareCache } from '../../shared/cache'
+import { writeAuditLog } from '../../../lib/audit-log'
 
 interface UpdateBookmarkRequest {
   title?: string
@@ -12,8 +13,8 @@ interface UpdateBookmarkRequest {
   description?: string
   cover_image?: string
   favicon?: string
-  tag_ids?: string[]  // 兼容旧版：标签 ID 数组
-  tags?: string[]     // 新版：标签名称数组（推荐）
+  tag_ids?: string[] // 兼容旧版：标签 ID 数组
+  tags?: string[] // 新版：标签名称数组（推荐）
   is_pinned?: boolean
   is_public?: boolean
 }
@@ -25,7 +26,9 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
     try {
       const userId = context.data.user_id
       const bookmarkId = context.params.id
-      const body = await context.request.json() as UpdateBookmarkRequest
+      const body = (await context.request.json()) as UpdateBookmarkRequest
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
 
       // 检查书签是否存在且属于当前用户
       const bookmarkRow = await context.env.DB.prepare(
@@ -46,40 +49,48 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
       // 构建更新语句
       const updates: string[] = []
       const values: SQLParam[] = []
+      const changedFields: string[] = []
 
       if (body.title !== undefined) {
         updates.push('title = ?')
         values.push(sanitizeString(body.title, 500))
+        changedFields.push('title')
       }
 
       if (body.url !== undefined) {
         updates.push('url = ?')
         values.push(sanitizeString(body.url, 2000))
+        changedFields.push('url')
       }
 
       if (body.description !== undefined) {
         updates.push('description = ?')
         values.push(body.description ? sanitizeString(body.description, 1000) : null)
+        changedFields.push('description')
       }
 
       if (body.cover_image !== undefined) {
         updates.push('cover_image = ?')
         values.push(body.cover_image ? sanitizeString(body.cover_image, 2000) : null)
+        changedFields.push('cover_image')
       }
 
       if (body.favicon !== undefined) {
         updates.push('favicon = ?')
         values.push(body.favicon ? sanitizeString(body.favicon, 2000) : null)
+        changedFields.push('favicon')
       }
 
       if (body.is_pinned !== undefined) {
         updates.push('is_pinned = ?')
         values.push(body.is_pinned ? 1 : 0)
+        changedFields.push('is_pinned')
       }
 
       if (body.is_public !== undefined) {
         updates.push('is_public = ?')
         values.push(body.is_public ? 1 : 0)
+        changedFields.push('is_public')
       }
 
       const now = new Date().toISOString()
@@ -89,28 +100,28 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
         values.push(now)
         values.push(bookmarkId)
 
-        await context.env.DB.prepare(
-          `UPDATE bookmarks SET ${updates.join(', ')} WHERE id = ?`
-        )
+        await context.env.DB.prepare(`UPDATE bookmarks SET ${updates.join(', ')} WHERE id = ?`)
           .bind(...values)
           .run()
       }
 
       // 更新标签关联
       if (body.tags !== undefined) {
+        changedFields.push('tags')
         // 新版：直接传标签名称，后端自动创建或链接
         const { createOrLinkTags } = await import('../../../lib/tags')
-        
+
         // 删除现有标签关联
         await context.env.DB.prepare('DELETE FROM bookmark_tags WHERE bookmark_id = ?')
           .bind(bookmarkId)
           .run()
-        
+
         // 使用批量处理函数
         if (body.tags.length > 0) {
           await createOrLinkTags(context.env.DB, bookmarkId, body.tags, userId)
         }
       } else if (body.tag_ids !== undefined) {
+        changedFields.push('tags')
         // 兼容旧版：传标签 ID
         // 删除现有标签关联
         await context.env.DB.prepare('DELETE FROM bookmark_tags WHERE bookmark_id = ?')
@@ -130,7 +141,9 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       // 获取更新后的书签
-      const updatedBookmarkRow = await context.env.DB.prepare('SELECT * FROM bookmarks WHERE id = ?')
+      const updatedBookmarkRow = await context.env.DB.prepare(
+        'SELECT * FROM bookmarks WHERE id = ?'
+      )
         .bind(bookmarkId)
         .first<BookmarkRow>()
 
@@ -148,6 +161,24 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       await invalidatePublicShareCache(context.env, userId)
+
+      if (changedFields.length > 0) {
+        await writeAuditLog(context.env.DB, {
+          userId,
+          eventType: 'bookmark.updated',
+          ip,
+          userAgent,
+          payload: {
+            bookmark_id: bookmarkId,
+            title: updatedBookmarkRow.title,
+            url: updatedBookmarkRow.url,
+            changed_fields: changedFields,
+            is_pinned: updatedBookmarkRow.is_pinned === 1,
+            is_public: updatedBookmarkRow.is_public === 1,
+            tag_count: tags?.length ?? 0,
+          },
+        })
+      }
 
       return success({
         bookmark: {
@@ -169,13 +200,15 @@ export const onRequestDelete: PagesFunction<Env, RouteParams, AuthContext>[] = [
     try {
       const userId = context.data.user_id
       const bookmarkId = context.params.id
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
 
       // 检查书签是否存在且属于当前用户
       const bookmark = await context.env.DB.prepare(
-        'SELECT id FROM bookmarks WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
+        'SELECT * FROM bookmarks WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
       )
         .bind(bookmarkId, userId)
-        .first()
+        .first<BookmarkRow>()
 
       if (!bookmark) {
         return notFound('Bookmark not found')
@@ -196,6 +229,20 @@ export const onRequestDelete: PagesFunction<Env, RouteParams, AuthContext>[] = [
 
       await invalidatePublicShareCache(context.env, userId)
 
+      await writeAuditLog(context.env.DB, {
+        userId,
+        eventType: 'bookmark.deleted',
+        ip,
+        userAgent,
+        payload: {
+          bookmark_id: bookmarkId,
+          title: bookmark.title,
+          url: bookmark.url,
+          is_pinned: bookmark.is_pinned === 1,
+          is_public: bookmark.is_public === 1,
+        },
+      })
+
       return noContent()
     } catch (error) {
       console.error('Delete bookmark error:', error)
@@ -211,6 +258,8 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
     try {
       const userId = context.data.user_id
       const bookmarkId = context.params.id
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
 
       // 检查书签是否存在、属于当前用户且已被软删除
       const bookmark = await context.env.DB.prepare(
@@ -232,7 +281,9 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
         .run()
 
       // 获取恢复后的书签
-      const restoredBookmarkRow = await context.env.DB.prepare('SELECT * FROM bookmarks WHERE id = ?')
+      const restoredBookmarkRow = await context.env.DB.prepare(
+        'SELECT * FROM bookmarks WHERE id = ?'
+      )
         .bind(bookmarkId)
         .first<BookmarkRow>()
 
@@ -250,6 +301,21 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       await invalidatePublicShareCache(context.env, userId)
+
+      await writeAuditLog(context.env.DB, {
+        userId,
+        eventType: 'bookmark.restored',
+        ip,
+        userAgent,
+        payload: {
+          bookmark_id: bookmarkId,
+          title: restoredBookmarkRow.title,
+          url: restoredBookmarkRow.url,
+          is_pinned: restoredBookmarkRow.is_pinned === 1,
+          is_public: restoredBookmarkRow.is_public === 1,
+          tag_count: tags?.length ?? 0,
+        },
+      })
 
       return success({
         bookmark: {
