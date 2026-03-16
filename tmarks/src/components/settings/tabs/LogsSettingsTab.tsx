@@ -3,13 +3,15 @@ import { useTranslation } from 'react-i18next'
 import { History, Trash2, Info, RefreshCw, Bug } from 'lucide-react'
 import { Toggle } from '@/components/common/Toggle'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { JsonViewerDialog } from '@/components/common/JsonViewerDialog'
 import {
   useClearOperationLogs,
   useOperationLogs,
   useWriteOperationDebugLog,
 } from '@/hooks/useOperationLogs'
 import { useToastStore } from '@/stores/toastStore'
-import type { UserPreferences } from '@/lib/types'
+import type { OperationLogEntry, UserPreferences } from '@/lib/types'
+import { getOperationLogViewModel, type OperationLogTone } from '@/lib/operation-log-utils'
 import { SettingsSection, SettingsItem, SettingsDivider } from '../SettingsSection'
 import { InfoBox } from '../InfoBox'
 import { ApiError } from '@/lib/api-client'
@@ -27,6 +29,10 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
   const { data, isLoading, refetch, isRefetching, error } = useOperationLogs(50)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [lastDebugError, setLastDebugError] = useState<string | null>(null)
+  const [selectedLog, setSelectedLog] = useState<OperationLogEntry | null>(null)
+  const selectedLogViewModel = selectedLog
+    ? getOperationLogViewModel(selectedLog, i18n.language)
+    : null
 
   const handleClearLogs = async () => {
     try {
@@ -64,6 +70,18 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
         type="warning"
         onConfirm={handleClearLogs}
         onCancel={() => setShowClearConfirm(false)}
+      />
+
+      <JsonViewerDialog
+        isOpen={Boolean(selectedLog && selectedLogViewModel)}
+        title={
+          selectedLog && selectedLogViewModel
+            ? t('logs.rawTitle', { event: selectedLogViewModel.eventLabel, id: selectedLog.id })
+            : t('logs.rawTitle', { event: '-', id: '-' })
+        }
+        description={t('logs.rawDescription')}
+        value={selectedLogViewModel?.rawText || t('logs.rawEmpty')}
+        onClose={() => setSelectedLog(null)}
       />
 
       <SettingsSection icon={History} title={t('logs.title')} description={t('logs.description')}>
@@ -232,31 +250,57 @@ export function LogsSettingsTab({ preferences, onUpdate }: LogsSettingsTabProps)
 
       <SettingsSection title={t('logs.recordsTitle')} description={t('logs.recordsDescription')}>
         <div className="space-y-3">
+          <div className="text-xs text-muted-foreground">{t('logs.summaryHint')}</div>
           {isLoading ? (
             <div className="p-6 rounded-lg bg-card border border-border text-sm text-muted-foreground">
               {t('logs.loading')}
             </div>
           ) : data?.logs.length ? (
-            data.logs.map((log) => (
-              <div key={log.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm font-medium text-foreground">{log.event_type}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatLogDateTime(log.created_at, i18n.language)}
+            data.logs.map((log) => {
+              const viewModel = getOperationLogViewModel(log, i18n.language)
+
+              return (
+                <button
+                  key={log.id}
+                  type="button"
+                  onClick={() => setSelectedLog(log)}
+                  className={`w-full text-left rounded-lg border p-4 space-y-3 transition-colors ${getLogToneClasses(viewModel.tone)}`}
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-medium text-foreground">{viewModel.eventLabel}</div>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-mono text-muted-foreground">
+                          {log.event_type}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 text-sm text-foreground">
+                        {viewModel.summary.map((line, index) => (
+                          <div key={`${log.id}-${index}`} className="leading-6 break-words">
+                            {line}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatLogDateTime(log.created_at, i18n.language)}
+                    </div>
                   </div>
-                </div>
-                {(log.ip || log.user_agent) && (
-                  <div className="text-xs text-muted-foreground break-all">
-                    {log.ip ? `${t('logs.ip')}: ${log.ip}` : ''}
-                    {log.ip && log.user_agent ? ' · ' : ''}
-                    {log.user_agent ? `${t('logs.userAgent')}: ${log.user_agent}` : ''}
-                  </div>
-                )}
-                <pre className="text-xs leading-6 whitespace-pre-wrap break-all rounded-md bg-muted/40 p-3 overflow-x-auto">
-                  {formatPayload(log.payload)}
-                </pre>
-              </div>
-            ))
+
+                  {(log.ip || log.user_agent) && (
+                    <div className="text-xs text-muted-foreground break-all">
+                      {log.ip ? `${t('logs.ip')}: ${log.ip}` : ''}
+                      {log.ip && log.user_agent ? ' · ' : ''}
+                      {log.user_agent ? `${t('logs.userAgent')}: ${log.user_agent}` : ''}
+                    </div>
+                  )}
+
+                  <div className="text-xs text-primary">{t('logs.viewRaw')}</div>
+                </button>
+              )
+            })
           ) : (
             <div className="p-6 rounded-lg bg-card border border-border text-sm text-muted-foreground">
               {t('logs.empty')}
@@ -287,19 +331,16 @@ function DebugItem({ label, value }: { label: string; value: string }) {
   )
 }
 
-function formatPayload(payload: unknown) {
-  if (payload == null) {
-    return '{}'
-  }
-
-  if (typeof payload === 'string') {
-    return payload
-  }
-
-  try {
-    return JSON.stringify(payload, null, 2)
-  } catch {
-    return String(payload)
+function getLogToneClasses(tone: OperationLogTone) {
+  switch (tone) {
+    case 'success':
+      return 'border-success/30 bg-success/5 hover:bg-success/10'
+    case 'warning':
+      return 'border-warning/30 bg-warning/5 hover:bg-warning/10'
+    case 'error':
+      return 'border-destructive/30 bg-destructive/5 hover:bg-destructive/10'
+    default:
+      return 'border-border bg-card hover:bg-muted/30'
   }
 }
 

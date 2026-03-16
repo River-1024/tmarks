@@ -39,6 +39,16 @@ interface UpdateAISettingsRequest {
   enabled?: boolean
 }
 
+interface AISettingsAuditSnapshot {
+  provider: AIProvider
+  model: string | null
+  enabled: boolean
+  enable_custom_prompt: boolean
+  custom_prompt_length: number
+  api_url: string | null
+  has_api_key: boolean
+}
+
 // 有效的服务商列表
 const VALID_PROVIDERS: AIProvider[] = ['openai', 'claude', 'deepseek', 'zhipu', 'modelscope', 'siliconflow', 'iflow', 'custom']
 
@@ -86,6 +96,26 @@ function parseApiUrls(raw: string | null): Record<string, string> {
   } catch {
     return {}
   }
+}
+
+function buildAISettingsAuditChanges(before: AISettingsAuditSnapshot, after: AISettingsAuditSnapshot) {
+  const fields: Array<keyof AISettingsAuditSnapshot> = [
+    'provider',
+    'model',
+    'enabled',
+    'enable_custom_prompt',
+    'custom_prompt_length',
+    'api_url',
+    'has_api_key',
+  ]
+
+  return fields
+    .filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]))
+    .map((field) => ({
+      field,
+      before: before[field],
+      after: after[field],
+    }))
 }
 
 /**
@@ -210,6 +240,9 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
         .bind(userId)
         .first<AISettingsRow>()
 
+      const existingApiKeys = parseStoredApiKeys(existing?.api_keys_encrypted || null)
+      const existingApiUrls = parseApiUrls(existing?.api_urls || null)
+
       const now = new Date().toISOString()
 
       let apiKeysStored: string | null = existing?.api_keys_encrypted || null
@@ -300,12 +333,35 @@ export const onRequestPut: PagesFunction<Env, RouteParams, AuthContext>[] = [
       }
 
       const apiUrls = parseApiUrls(apiUrlsJson)
+      const nextApiKeys = parseStoredApiKeys(apiKeysStored)
+      const beforeSnapshot: AISettingsAuditSnapshot = {
+        provider: existing?.provider ?? 'openai',
+        model: existing?.model ?? null,
+        enabled: existing?.enabled === 1,
+        enable_custom_prompt: existing?.enable_custom_prompt === 1,
+        custom_prompt_length: existing?.custom_prompt?.length ?? 0,
+        api_url: existingApiUrls[existing?.provider ?? 'openai'] || null,
+        has_api_key: Boolean(existingApiKeys[existing?.provider ?? 'openai']?.trim()),
+      }
+      const afterSnapshot: AISettingsAuditSnapshot = {
+        provider: nextProvider,
+        model: nextModel,
+        enabled: nextEnabled,
+        enable_custom_prompt: nextEnableCustomPrompt,
+        custom_prompt_length: nextCustomPrompt?.length ?? 0,
+        api_url: apiUrls[nextProvider] || null,
+        has_api_key: Boolean(nextApiKeys[nextProvider]?.trim()),
+      }
+
       await writeAuditLog(context.env.DB, {
         userId,
         eventType: 'settings.ai.updated',
         ip,
         userAgent,
         payload: {
+          before: beforeSnapshot,
+          after: afterSnapshot,
+          changes: buildAISettingsAuditChanges(beforeSnapshot, afterSnapshot),
           provider: nextProvider,
           model: nextModel,
           enabled: nextEnabled,

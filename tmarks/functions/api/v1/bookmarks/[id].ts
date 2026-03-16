@@ -19,6 +19,42 @@ interface UpdateBookmarkRequest {
   is_public?: boolean
 }
 
+interface BookmarkAuditSnapshot {
+  title: string
+  url: string
+  description: string | null
+  cover_image: string | null
+  favicon: string | null
+  is_pinned: boolean
+  is_public: boolean
+  tags: string[]
+}
+
+function normalizeAuditTags(tags: string[]) {
+  return [...tags].sort((a, b) => a.localeCompare(b))
+}
+
+function buildBookmarkAuditChanges(before: BookmarkAuditSnapshot, after: BookmarkAuditSnapshot) {
+  const fields: Array<keyof BookmarkAuditSnapshot> = [
+    'title',
+    'url',
+    'description',
+    'cover_image',
+    'favicon',
+    'is_pinned',
+    'is_public',
+    'tags',
+  ]
+
+  return fields
+    .filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]))
+    .map((field) => ({
+      field,
+      before: before[field],
+      after: after[field],
+    }))
+}
+
 // PATCH /api/v1/bookmarks/:id - 更新书签
 export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
   requireAuth,
@@ -39,6 +75,26 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
 
       if (!bookmarkRow) {
         return notFound('Bookmark not found')
+      }
+
+      const { results: previousTags } = await context.env.DB.prepare(
+        `SELECT t.name
+         FROM tags t
+         INNER JOIN bookmark_tags bt ON t.id = bt.tag_id
+         WHERE bt.bookmark_id = ? AND t.deleted_at IS NULL`
+      )
+        .bind(bookmarkId)
+        .all<{ name: string }>()
+
+      const beforeSnapshot: BookmarkAuditSnapshot = {
+        title: bookmarkRow.title,
+        url: bookmarkRow.url,
+        description: bookmarkRow.description ?? null,
+        cover_image: bookmarkRow.cover_image ?? null,
+        favicon: bookmarkRow.favicon ?? null,
+        is_pinned: bookmarkRow.is_pinned === 1,
+        is_public: bookmarkRow.is_public === 1,
+        tags: normalizeAuditTags((previousTags ?? []).map((tag) => tag.name)),
       }
 
       // 验证输入
@@ -163,6 +219,17 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
       await invalidatePublicShareCache(context.env, userId)
 
       if (changedFields.length > 0) {
+        const afterSnapshot: BookmarkAuditSnapshot = {
+          title: updatedBookmarkRow.title,
+          url: updatedBookmarkRow.url,
+          description: updatedBookmarkRow.description ?? null,
+          cover_image: updatedBookmarkRow.cover_image ?? null,
+          favicon: updatedBookmarkRow.favicon ?? null,
+          is_pinned: updatedBookmarkRow.is_pinned === 1,
+          is_public: updatedBookmarkRow.is_public === 1,
+          tags: normalizeAuditTags((tags ?? []).map((tag) => tag.name)),
+        }
+
         await writeAuditLog(context.env.DB, {
           userId,
           eventType: 'bookmark.updated',
@@ -173,6 +240,9 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
             title: updatedBookmarkRow.title,
             url: updatedBookmarkRow.url,
             changed_fields: changedFields,
+            changes: buildBookmarkAuditChanges(beforeSnapshot, afterSnapshot),
+            before: beforeSnapshot,
+            after: afterSnapshot,
             is_pinned: updatedBookmarkRow.is_pinned === 1,
             is_public: updatedBookmarkRow.is_public === 1,
             tag_count: tags?.length ?? 0,
