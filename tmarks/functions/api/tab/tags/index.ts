@@ -16,6 +16,11 @@ interface CreateTagRequest {
   color?: string
 }
 
+interface ExistingTagRow {
+  id: string
+  deleted_at: string | null
+}
+
 interface TagWithCount {
   id: string
   name: string
@@ -73,27 +78,40 @@ export const onRequestPost: PagesFunction<Env, RouteParams, ApiKeyAuthContext>[]
 
       const name = sanitizeString(body.name, 50)
       const color = body.color ? sanitizeString(body.color, 20) : null
+      const now = new Date().toISOString()
 
-      // 检查标签是否已存在
+      // 检查标签是否已存在（包含已软删除标签）
       const existing = await context.env.DB.prepare(
-        'SELECT id FROM tags WHERE user_id = ? AND LOWER(name) = LOWER(?) AND deleted_at IS NULL'
+        'SELECT id, deleted_at FROM tags WHERE user_id = ? AND LOWER(name) = LOWER(?) LIMIT 1'
       )
         .bind(userId, name)
-        .first()
+        .first<ExistingTagRow>()
 
-      if (existing) {
+      if (existing && !existing.deleted_at) {
         return badRequest('Tag with this name already exists')
       }
 
-      const now = new Date().toISOString()
-      const tagId = generateUUID()
+      const tagId = existing?.id || generateUUID()
 
-      await context.env.DB.prepare(
-        `INSERT INTO tags (id, user_id, name, color, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(tagId, userId, name, color, now, now)
-        .run()
+      if (existing?.deleted_at) {
+        await context.env.DB.prepare(
+          `UPDATE tags
+           SET deleted_at = NULL,
+               updated_at = ?,
+               name = ?,
+               color = COALESCE(?, color)
+           WHERE id = ? AND user_id = ?`
+        )
+          .bind(now, name, color, tagId, userId)
+          .run()
+      } else {
+        await context.env.DB.prepare(
+          `INSERT INTO tags (id, user_id, name, color, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+          .bind(tagId, userId, name, color, now, now)
+          .run()
+      }
 
       const tag = await context.env.DB.prepare('SELECT * FROM tags WHERE id = ?')
         .bind(tagId)

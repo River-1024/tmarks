@@ -745,25 +745,32 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
     const input = tagInput.trim()
     if (!input) return
 
-    const tagNames = input
-      .split(/[,，]/)
-      .map(name => name.trim())
-      .filter(name => name.length > 0)
+    const tagNames = normalizeTags(
+      input
+        .split(/[,，]/)
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0),
+    )
 
     if (tagNames.length === 0) return
 
     const newSelectedIds = [...selectedTagIds]
+    const selectedIdSet = new Set(newSelectedIds)
 
     for (const tagName of tagNames) {
-      const existingTag = tags.find((t) => t.name.toLowerCase() === tagName.toLowerCase())
+      const existingTag = normalizedTagMap.get(normalizeTagName(tagName))
       if (existingTag) {
-        if (!newSelectedIds.includes(existingTag.id)) {
+        if (!selectedIdSet.has(existingTag.id)) {
+          selectedIdSet.add(existingTag.id)
           newSelectedIds.push(existingTag.id)
         }
       } else {
         try {
           const newTag = await createTag.mutateAsync({ name: tagName })
-          newSelectedIds.push(newTag.id)
+          if (!selectedIdSet.has(newTag.id)) {
+            selectedIdSet.add(newTag.id)
+            newSelectedIds.push(newTag.id)
+          }
           setSelectedNewTags((prev) => prev.filter((tag) => normalizeTagName(tag) !== normalizeTagName(tagName)))
         } catch (error) {
           console.error('Failed to create tag:', error)

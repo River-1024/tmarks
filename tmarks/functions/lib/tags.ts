@@ -19,25 +19,48 @@ export async function createOrLinkTags(
 
   const now = new Date().toISOString()
 
-  // 优化：批量查询所有标签，避免 N+1 查询
-  const trimmedNames = tagNames.map(name => name.trim()).filter(name => name.length > 0)
-  if (trimmedNames.length === 0) return
+  // 去除空值并按大小写不敏感去重，避免批量输入重复触发冲突
+  const seenNames = new Set<string>()
+  const normalizedNames: string[] = []
+  for (const name of tagNames) {
+    const trimmed = name.trim()
+    if (!trimmed) continue
+    const lower = trimmed.toLowerCase()
+    if (seenNames.has(lower)) continue
+    seenNames.add(lower)
+    normalizedNames.push(trimmed)
+  }
+  if (normalizedNames.length === 0) return
 
   // 构建 IN 查询的占位符
-  const placeholders = trimmedNames.map(() => '?').join(',')
+  const placeholders = normalizedNames.map(() => '?').join(',')
   const { results: existingTags } = await db
-    .prepare(`SELECT id, name FROM tags WHERE user_id = ? AND LOWER(name) IN (${placeholders}) AND deleted_at IS NULL`)
-    .bind(userId, ...trimmedNames.map(name => name.toLowerCase()))
-    .all<{ id: string; name: string }>()
+    .prepare(`SELECT id, name, deleted_at FROM tags WHERE user_id = ? AND LOWER(name) IN (${placeholders})`)
+    .bind(userId, ...normalizedNames.map(name => name.toLowerCase()))
+    .all<{ id: string; name: string; deleted_at: string | null }>()
 
   // 创建标签名称到 ID 的映射（不区分大小写）
   const tagMap = new Map<string, string>()
+  const restoreStatements: D1PreparedStatement[] = []
   for (const tag of existingTags || []) {
-    tagMap.set(tag.name.toLowerCase(), tag.id)
+    const lower = tag.name.toLowerCase()
+    if (tag.deleted_at) {
+      // 恢复软删除标签，避免命中 UNIQUE(user_id, name) 冲突
+      restoreStatements.push(
+        db
+          .prepare('UPDATE tags SET deleted_at = NULL, updated_at = ? WHERE id = ? AND user_id = ?')
+          .bind(now, tag.id, userId)
+      )
+    }
+    tagMap.set(lower, tag.id)
+  }
+
+  if (restoreStatements.length > 0) {
+    await db.batch(restoreStatements)
   }
 
   // 找出需要创建的新标签
-  const tagsToCreate = trimmedNames.filter(name => !tagMap.has(name.toLowerCase()))
+  const tagsToCreate = normalizedNames.filter(name => !tagMap.has(name.toLowerCase()))
 
   // 批量创建新标签
   if (tagsToCreate.length > 0) {
@@ -55,7 +78,7 @@ export async function createOrLinkTags(
   }
 
   // 批量链接标签到书签
-  const linkStatements = trimmedNames.map(name => {
+  const linkStatements = normalizedNames.map(name => {
     const tagId = tagMap.get(name.toLowerCase())
     if (!tagId) {
       console.error(`[createOrLinkTags] Tag ID not found for: ${name}`)

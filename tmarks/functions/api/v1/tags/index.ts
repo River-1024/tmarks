@@ -11,6 +11,11 @@ interface CreateTagRequest {
   color?: string
 }
 
+interface ExistingTagRow {
+  id: string
+  deleted_at: string | null
+}
+
 interface TagWithCount extends Tag {
   bookmark_count: number
 }
@@ -69,34 +74,48 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
       const ip = context.request.headers.get('CF-Connecting-IP')
       const userAgent = context.request.headers.get('User-Agent')
 
-      if (!body.name) {
+      if (!body.name?.trim()) {
         return badRequest('Tag name is required')
       }
 
       const name = sanitizeString(body.name, 50)
       const color = body.color ? sanitizeString(body.color, 20) : null
+      const now = new Date().toISOString()
 
-      // 检查标签是否已存在
+      // 检查标签是否已存在（包含已软删除标签）
       const existing = await context.env.DB.prepare(
-        'SELECT id FROM tags WHERE user_id = ? AND LOWER(name) = LOWER(?) AND deleted_at IS NULL'
+        'SELECT id, deleted_at FROM tags WHERE user_id = ? AND LOWER(name) = LOWER(?) LIMIT 1'
       )
         .bind(userId, name)
-        .first()
+        .first<ExistingTagRow>()
 
-      if (existing) {
+      if (existing && !existing.deleted_at) {
         return conflict('Tag with this name already exists')
       }
 
-      const now = new Date().toISOString()
-      const tagUuid = generateUUID()
+      const isRestored = Boolean(existing?.deleted_at)
+      const tagUuid = existing?.id || generateUUID()
 
-      // 创建标签
-      await context.env.DB.prepare(
-        `INSERT INTO tags (id, user_id, name, color, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(tagUuid, userId, name, color, now, now)
-        .run()
+      if (isRestored) {
+        // 唯一索引覆盖已软删除记录：恢复原记录，避免重新插入触发冲突
+        await context.env.DB.prepare(
+          `UPDATE tags
+           SET deleted_at = NULL,
+               updated_at = ?,
+               name = ?,
+               color = COALESCE(?, color)
+           WHERE id = ? AND user_id = ?`
+        )
+          .bind(now, name, color, tagUuid, userId)
+          .run()
+      } else {
+        await context.env.DB.prepare(
+          `INSERT INTO tags (id, user_id, name, color, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+          .bind(tagUuid, userId, name, color, now, now)
+          .run()
+      }
 
       const tag = await context.env.DB.prepare('SELECT * FROM tags WHERE id = ?')
         .bind(tagUuid)
@@ -104,7 +123,7 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
 
       await writeAuditLog(context.env.DB, {
         userId,
-        eventType: 'tag.created',
+        eventType: isRestored ? 'tag.restored' : 'tag.created',
         ip,
         userAgent,
         payload: {
@@ -112,6 +131,7 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
           name,
           color,
           bookmark_count: 0,
+          restored: isRestored,
         },
       })
 
