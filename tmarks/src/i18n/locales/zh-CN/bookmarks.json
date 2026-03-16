@@ -158,6 +158,10 @@
     "tagsSelected": "已选 {{count}} 个",
     "tagsInputPlaceholder": "输入标签名称（多个用逗号分隔），按 Enter 添加...",
     "noTags": "暂无标签，在上方输入框输入后按 Enter 创建",
+    "tagLibrary": {
+      "title": "标签库",
+      "hint": "可单击标签进行选择或取消"
+    },
     "pinned": "置顶",
     "archived": "归档",
     "public": "公开分享",
@@ -181,7 +185,21 @@
       "bookmark": "书签：{{title}}"
     },
     "createTagFailed": "创建标签\"{{name}}\"失败，请重试",
-    "operationFailed": "操作失败，请重试"
+    "operationFailed": "操作失败，请重试",
+    "ai": {
+      "generate": "AI生成",
+      "generating": "AI生成中...",
+      "loadingSettings": "正在加载 AI 设置...",
+      "notConfigured": "AI 尚未启用或未配置当前服务商 API Key，请先在设置中完成配置。",
+      "requireTitleUrl": "请先填写标题和 URL，再使用 AI 生成标签。",
+      "resultTitle": "AI 生成标签",
+      "resultHint": "单击标签可选择或取消",
+      "emptyHint": "点击上方 AI生成 按钮获取推荐标签",
+      "newBadge": "new",
+      "noResult": "AI 未返回可用标签，请重试。",
+      "generateFailed": "AI 生成失败，请重试。",
+      "createTagFailed": "创建 AI 新标签“{{name}}”失败"
+    }
   },
   "statistics": {
     "title": "书签统计",

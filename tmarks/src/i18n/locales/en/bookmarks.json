@@ -158,6 +158,10 @@
     "tagsSelected": "{{count}} selected",
     "tagsInputPlaceholder": "Enter tag names (comma-separated), press Enter to add...",
     "noTags": "No tags yet, type above and press Enter to create",
+    "tagLibrary": {
+      "title": "Tag Library",
+      "hint": "Click tags to select or deselect"
+    },
     "pinned": "Pinned",
     "archived": "Archived",
     "public": "Public",
@@ -181,7 +185,21 @@
       "bookmark": "Bookmark: {{title}}"
     },
     "createTagFailed": "Failed to create tag \"{{name}}\", please try again",
-    "operationFailed": "Operation failed, please try again"
+    "operationFailed": "Operation failed, please try again",
+    "ai": {
+      "generate": "AI Generate",
+      "generating": "Generating...",
+      "loadingSettings": "Loading AI settings...",
+      "notConfigured": "AI is disabled or API key for the current provider is missing. Please complete AI settings first.",
+      "requireTitleUrl": "Please fill in title and URL before generating tags with AI.",
+      "resultTitle": "AI Generated Tags",
+      "resultHint": "Click tags to select/deselect",
+      "emptyHint": "Click AI Generate above to fetch suggestions",
+      "newBadge": "new",
+      "noResult": "AI did not return any usable tags. Please try again.",
+      "generateFailed": "AI generation failed. Please try again.",
+      "createTagFailed": "Failed to create AI tag \"{{name}}\""
+    }
   },
   "statistics": {
     "title": "Bookmark Statistics",

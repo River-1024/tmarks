@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { logger } from '@/lib/logger'
 import { useCreateBookmark, useUpdateBookmark, useDeleteBookmark } from '@/hooks/useBookmarks'
 import { useCreateTag, useTags } from '@/hooks/useTags'
+import { useAiSettings } from '@/hooks/useAiSettings'
 import { bookmarksService } from '@/services/bookmarks'
+import { callAI } from '@/lib/ai/client'
 import type { Bookmark, CreateBookmarkRequest, UpdateBookmarkRequest } from '@/lib/types'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Z_INDEX } from '@/lib/constants/z-index'
@@ -12,6 +14,192 @@ interface BookmarkFormProps {
   bookmark?: Bookmark | null
   onClose: () => void
   onSuccess?: () => void
+}
+
+interface SinglePromptTemplateVars {
+  title: string
+  url: string
+  description: string
+  content: string
+  existingTags: string
+  recentBookmarks: string
+  maxTags: string
+}
+
+interface AiSuggestedTag {
+  name: string
+  isNew: boolean
+}
+
+function normalizeTagName(tag: string) {
+  return tag.trim().toLowerCase()
+}
+
+function normalizeTags(tags: string[]) {
+  const seen = new Set<string>()
+  const normalized: string[] = []
+
+  for (const tag of tags) {
+    const trimmed = tag.trim()
+    if (!trimmed) continue
+
+    const normalizedName = normalizeTagName(trimmed)
+    if (seen.has(normalizedName)) continue
+
+    seen.add(normalizedName)
+    normalized.push(trimmed)
+  }
+
+  return normalized.slice(0, 12)
+}
+
+function getStringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function renderPromptTemplate(template: string, vars: SinglePromptTemplateVars): string {
+  return template.replace(
+    /\{(title|url|description|content|existingTags|recentBookmarks|maxTags)\}/g,
+    (_, key: keyof SinglePromptTemplateVars) => vars[key] ?? '',
+  )
+}
+
+function extractTagNames(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return normalizeTags(
+    value
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item
+        }
+        if (isRecord(item)) {
+          return getStringValue(item.name)
+        }
+        return null
+      })
+      .filter((item): item is string => Boolean(item)),
+  )
+}
+
+function extractTagsFromParsedPayload(
+  parsed: unknown,
+  bookmarkCtx: { id?: string; url?: string },
+): string[] {
+  if (Array.isArray(parsed)) {
+    return extractTagNames(parsed)
+  }
+
+  if (!isRecord(parsed)) {
+    return []
+  }
+
+  if (Array.isArray(parsed.tags)) {
+    return extractTagNames(parsed.tags)
+  }
+
+  if (Array.isArray(parsed.suggestedTags)) {
+    return extractTagNames(parsed.suggestedTags)
+  }
+
+  if (Array.isArray(parsed.items)) {
+    const matched = parsed.items.find((item) => {
+      if (!isRecord(item)) return false
+      if (bookmarkCtx.id && item.bookmark_id === bookmarkCtx.id) return true
+      if (bookmarkCtx.url && item.url === bookmarkCtx.url) return true
+      return false
+    })
+
+    const firstItem = matched || parsed.items[0]
+    if (isRecord(firstItem) && Array.isArray(firstItem.tags)) {
+      return extractTagNames(firstItem.tags)
+    }
+  }
+
+  return []
+}
+
+function extractTagsFromAiResponse(
+  content: string,
+  bookmarkCtx: { id?: string; url?: string },
+): string[] {
+  const trimmed = content.trim()
+  if (!trimmed) {
+    return []
+  }
+
+  const candidates: string[] = []
+  const fenced = trimmed.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+
+  candidates.push(trimmed)
+  if (fenced !== trimmed) {
+    candidates.push(fenced)
+  }
+
+  const objectStart = fenced.indexOf('{')
+  const objectEnd = fenced.lastIndexOf('}')
+  if (objectStart !== -1 && objectEnd > objectStart) {
+    candidates.push(fenced.slice(objectStart, objectEnd + 1))
+  }
+
+  const arrayStart = fenced.indexOf('[')
+  const arrayEnd = fenced.lastIndexOf(']')
+  if (arrayStart !== -1 && arrayEnd > arrayStart) {
+    candidates.push(fenced.slice(arrayStart, arrayEnd + 1))
+  }
+
+  for (const candidate of [...new Set(candidates)]) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown
+      const tags = extractTagsFromParsedPayload(parsed, bookmarkCtx)
+      if (tags.length > 0) {
+        return tags
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return []
+}
+
+function buildSingleBookmarkPrompt(input: {
+  title: string
+  url: string
+  description: string
+  selectedTags: string[]
+  existingTags: string[]
+  customPrompt?: string
+}) {
+  const bookmarkBlock = `书签信息：
+- 标题：${input.title}
+- URL：${input.url}
+- 描述：${input.description || '（无）'}
+- 当前已选标签：${input.selectedTags.length > 0 ? input.selectedTags.join('、') : '（无）'}
+
+标签库（优先复用）：
+${input.existingTags.length > 0 ? input.existingTags.join('、') : '（无）'}`
+
+  const contract = `输出要求：
+1. 只返回一个合法 JSON 对象，不要输出解释文字、Markdown、代码块
+2. 优先返回 2-6 个中文标签，尽量复用标签库
+3. JSON 格式必须是：{"tags":["标签1","标签2"]}`
+
+  if (input.customPrompt?.trim()) {
+    return `${input.customPrompt.trim()}\n\n${bookmarkBlock}\n\n${contract}`
+  }
+
+  return `你是书签标签助手，请为单个书签生成准确、可复用的中文标签。
+
+${bookmarkBlock}
+
+${contract}`
 }
 
 export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps) {
@@ -33,6 +221,9 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
   const [isPublic, setIsPublic] = useState(bookmark?.is_public || false)
   const [error, setError] = useState('')
   const [tagInput, setTagInput] = useState('')
+  const [selectedNewTags, setSelectedNewTags] = useState<string[]>([])
+  const [aiSuggestedTagNames, setAiSuggestedTagNames] = useState<string[]>([])
+  const [isGeneratingAiTags, setIsGeneratingAiTags] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [urlWarning, setUrlWarning] = useState<{ exists: true; bookmark: Bookmark } | null>(null)
   const [checkingUrl, setCheckingUrl] = useState(false)
@@ -42,7 +233,38 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
   const deleteBookmark = useDeleteBookmark()
   const createTag = useCreateTag()
   const { data: tagsData } = useTags()
+  const { data: aiSettings, isLoading: isLoadingAiSettings } = useAiSettings()
   const tags = tagsData?.tags || []
+  const normalizedTagMap = useMemo(
+    () => new Map(tags.map((tag) => [normalizeTagName(tag.name), tag] as const)),
+    [tags],
+  )
+  const aiConfig = useMemo(() => {
+    if (!aiSettings) return null
+
+    const provider = aiSettings.provider
+    return {
+      enabled: aiSettings.enabled,
+      provider,
+      apiKey: aiSettings.api_keys?.[provider] || '',
+      apiUrl: aiSettings.api_urls?.[provider] || '',
+      model: aiSettings.model || undefined,
+      customPrompt:
+        aiSettings.enable_custom_prompt && aiSettings.custom_prompt
+          ? aiSettings.custom_prompt
+          : undefined,
+    }
+  }, [aiSettings])
+  const aiSuggestedTags = useMemo<AiSuggestedTag[]>(
+    () =>
+      aiSuggestedTagNames.map((name) => ({
+        name,
+        isNew: !normalizedTagMap.has(normalizeTagName(name)),
+      })),
+    [aiSuggestedTagNames, normalizedTagMap],
+  )
+  const selectedTagCount = selectedTagIds.length + selectedNewTags.length
+  const selectedTagIdSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds])
 
   // URL 变化时检查是否已存在
   useEffect(() => {
@@ -86,6 +308,77 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
     return () => clearTimeout(timeoutId)
   }, [url, isEditing])
 
+  useEffect(() => {
+    if (selectedNewTags.length === 0) return
+
+    const nextSelectedTagIds = [...selectedTagIds]
+    const selectedIdSet = new Set(nextSelectedTagIds)
+    const remainingNewTags: string[] = []
+    let hasIdChanged = false
+
+    for (const tagName of selectedNewTags) {
+      const existingTag = normalizedTagMap.get(normalizeTagName(tagName))
+      if (existingTag) {
+        if (!selectedIdSet.has(existingTag.id)) {
+          selectedIdSet.add(existingTag.id)
+          nextSelectedTagIds.push(existingTag.id)
+          hasIdChanged = true
+        }
+      } else {
+        remainingNewTags.push(tagName)
+      }
+    }
+
+    if (hasIdChanged) {
+      setSelectedTagIds(nextSelectedTagIds)
+    }
+
+    if (remainingNewTags.length !== selectedNewTags.length) {
+      setSelectedNewTags(remainingNewTags)
+    }
+  }, [normalizedTagMap, selectedNewTags, selectedTagIds])
+
+  const ensureResolvedTagIds = async () => {
+    const resolvedTagIds = [...selectedTagIds]
+    const resolvedIdSet = new Set(resolvedTagIds)
+
+    if (selectedNewTags.length === 0) {
+      return resolvedTagIds
+    }
+
+    const createdTagIds: string[] = []
+
+    for (const tagName of selectedNewTags) {
+      const existingTag = normalizedTagMap.get(normalizeTagName(tagName))
+      if (existingTag) {
+        if (!resolvedIdSet.has(existingTag.id)) {
+          resolvedIdSet.add(existingTag.id)
+          resolvedTagIds.push(existingTag.id)
+        }
+        continue
+      }
+
+      try {
+        const newTag = await createTag.mutateAsync({ name: tagName })
+        if (!resolvedIdSet.has(newTag.id)) {
+          resolvedIdSet.add(newTag.id)
+          resolvedTagIds.push(newTag.id)
+          createdTagIds.push(newTag.id)
+        }
+      } catch (createError) {
+        logger.error('Failed to create AI generated tag:', createError)
+        throw new Error(t('form.ai.createTagFailed', { name: tagName }))
+      }
+    }
+
+    if (createdTagIds.length > 0) {
+      setSelectedTagIds((prev) => [...new Set([...prev, ...createdTagIds])])
+    }
+    setSelectedNewTags([])
+
+    return resolvedTagIds
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -113,9 +406,11 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
     }
 
     try {
+      const resolvedTagIds = await ensureResolvedTagIds()
+
       if (isEditing && bookmark) {
         const updateData: UpdateBookmarkRequest = {
-          tag_ids: selectedTagIds,
+          tag_ids: resolvedTagIds,
           is_pinned: isPinned,
           is_archived: isArchived,
           is_public: isPublic,
@@ -146,7 +441,7 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
           url: url.trim(),
           description: description.trim() ? description.trim() : undefined,
           cover_image: coverImage.trim() ? coverImage.trim() : undefined,
-          tag_ids: selectedTagIds,
+          tag_ids: resolvedTagIds,
           is_pinned: isPinned,
           is_archived: isArchived,
           is_public: isPublic,
@@ -166,6 +461,107 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
       setSelectedTagIds(selectedTagIds.filter((id) => id !== tagId))
     } else {
       setSelectedTagIds([...selectedTagIds, tagId])
+    }
+  }
+
+  const toggleNewTag = (tagName: string) => {
+    const normalized = normalizeTagName(tagName)
+    setSelectedNewTags((prev) => {
+      const exists = prev.some((tag) => normalizeTagName(tag) === normalized)
+      if (exists) {
+        return prev.filter((tag) => normalizeTagName(tag) !== normalized)
+      }
+      return [...prev, tagName.trim()]
+    })
+  }
+
+  const toggleTagByName = (tagName: string) => {
+    const existingTag = normalizedTagMap.get(normalizeTagName(tagName))
+    if (existingTag) {
+      toggleTag(existingTag.id)
+      return
+    }
+    toggleNewTag(tagName)
+  }
+
+  const handleGenerateAiTags = async () => {
+    setError('')
+    if (isLoadingAiSettings) {
+      setError(t('form.ai.loadingSettings'))
+      return
+    }
+
+    if (!aiConfig?.enabled || !aiConfig.apiKey) {
+      setError(t('form.ai.notConfigured'))
+      return
+    }
+
+    if (!title.trim() || !url.trim()) {
+      setError(t('form.ai.requireTitleUrl'))
+      return
+    }
+
+    try {
+      new URL(url.trim())
+    } catch {
+      setError(t('form.validation.urlInvalid'))
+      return
+    }
+
+    setIsGeneratingAiTags(true)
+    setAiSuggestedTagNames([])
+
+    const selectedExistingTagNames = selectedTagIds
+      .map((tagId) => tags.find((tag) => tag.id === tagId)?.name)
+      .filter((name): name is string => Boolean(name))
+    const allSelectedTagNames = normalizeTags([...selectedExistingTagNames, ...selectedNewTags])
+
+    const promptTemplateVars: SinglePromptTemplateVars = {
+      title: title.trim(),
+      url: url.trim(),
+      description: description.trim(),
+      content: '',
+      existingTags: tags.map((tag) => tag.name).join(', '),
+      recentBookmarks: '',
+      maxTags: '6',
+    }
+    const customPrompt = aiConfig.customPrompt
+      ? renderPromptTemplate(aiConfig.customPrompt, promptTemplateVars)
+      : undefined
+    const prompt = buildSingleBookmarkPrompt({
+      title: title.trim(),
+      url: url.trim(),
+      description: description.trim(),
+      selectedTags: allSelectedTagNames,
+      existingTags: tags.map((tag) => tag.name),
+      customPrompt,
+    })
+
+    try {
+      const result = await callAI({
+        provider: aiConfig.provider,
+        apiKey: aiConfig.apiKey,
+        apiUrl: aiConfig.apiUrl,
+        model: aiConfig.model,
+        prompt,
+      })
+
+      const extractedTags = extractTagsFromAiResponse(result.content, {
+        id: bookmark?.id,
+        url: url.trim(),
+      })
+
+      if (extractedTags.length === 0) {
+        setError(t('form.ai.noResult'))
+        return
+      }
+
+      setAiSuggestedTagNames(extractedTags)
+    } catch (aiError) {
+      logger.error('AI tag generation failed:', aiError)
+      setError(aiError instanceof Error ? aiError.message : t('form.ai.generateFailed'))
+    } finally {
+      setIsGeneratingAiTags(false)
     }
   }
 
@@ -223,6 +619,7 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
         try {
           const newTag = await createTag.mutateAsync({ name: tagName })
           newSelectedIds.push(newTag.id)
+          setSelectedNewTags((prev) => prev.filter((tag) => normalizeTagName(tag) !== normalizeTagName(tagName)))
         } catch (error) {
           console.error('Failed to create tag:', error)
           setError(t('form.createTagFailed', { name: tagName }))
@@ -252,7 +649,11 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
     }
   }
 
-  const isPending = createBookmark.isPending || updateBookmark.isPending || deleteBookmark.isPending || createTag.isPending
+  const isPending =
+    createBookmark.isPending ||
+    updateBookmark.isPending ||
+    deleteBookmark.isPending ||
+    createTag.isPending
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.BOOKMARK_FORM }}>
@@ -393,11 +794,24 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
                   {t('form.tagsBatchHint')}
                 </span>
               </label>
-              {selectedTagIds.length > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {t('form.tagsSelected', { count: selectedTagIds.length })}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {selectedTagCount > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {t('form.tagsSelected', { count: selectedTagCount })}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleGenerateAiTags}
+                  className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/30 hover:bg-primary/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isPending || isGeneratingAiTags || isLoadingAiSettings}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3l1.9 4.8L19 9.5l-3.9 3.2L16.3 18 12 15.4 7.7 18l1.2-5.3L5 9.5l5.1-1.7L12 3z" />
+                  </svg>
+                  {isGeneratingAiTags ? t('form.ai.generating') : t('form.ai.generate')}
+                </button>
+              </div>
             </div>
 
             {/* 标签输入框 */}
@@ -412,7 +826,7 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
             />
 
             {/* 已选标签 */}
-            {selectedTagIds.length > 0 && (
+            {selectedTagCount > 0 && (
               <div className="mb-2 p-2 bg-primary/5 border border-primary/20 rounded-lg">
                 <div className="flex flex-wrap gap-1.5">
                   {selectedTagIds.map((tagId) => {
@@ -430,37 +844,130 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
                       </button>
                     )
                   })}
+                  {selectedNewTags.map((tagName) => (
+                    <button
+                      key={`new-${tagName}`}
+                      type="button"
+                      onClick={() => toggleNewTag(tagName)}
+                      className="text-xs px-2.5 py-1 rounded-full bg-primary text-primary-content hover:bg-primary/90 transition-colors shadow-sm"
+                      disabled={isPending}
+                    >
+                      {tagName}
+                      <span className="ml-1 text-[10px] uppercase tracking-wide text-primary-content/85">
+                        {t('form.ai.newBadge')}
+                      </span>{' '}
+                      ×
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* 可选标签列表 */}
-            <div
-              ref={availableTagsScrollRef}
-              onWheelCapture={handleAvailableTagsWheel}
-              className="p-2.5 bg-muted rounded-lg max-h-[120px] overflow-y-auto scrollbar-theme min-h-0 overscroll-contain"
-              style={{ scrollbarGutter: 'stable' }}
-            >
-              <div ref={availableTagsInnerRef} className="flex flex-wrap gap-1.5">
-                {tags.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-1">
-                    {t('form.noTags')}
-                  </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="p-2.5 rounded-lg border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent min-h-[124px]">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{t('form.ai.resultTitle')}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{t('form.ai.resultHint')}</p>
+                  </div>
+                  <span className="px-2 py-0.5 text-[11px] rounded-full bg-primary/20 text-primary font-medium">
+                    {isGeneratingAiTags ? '...' : aiSuggestedTags.length}
+                  </span>
+                </div>
+
+                {isGeneratingAiTags ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z" />
+                    </svg>
+                    <span>{t('form.ai.generating')}</span>
+                  </div>
+                ) : aiSuggestedTags.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-1">{t('form.ai.emptyHint')}</p>
                 ) : (
-                  tags
-                    .filter((tag) => !selectedTagIds.includes(tag.id))
-                    .map((tag) => (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        onClick={() => toggleTag(tag.id)}
-                        className="text-xs px-2.5 py-1 rounded-full bg-card border border-border text-foreground hover:border-primary/50 hover:bg-primary/5 transition-colors"
-                        disabled={isPending}
-                      >
-                        {tag.name}
-                      </button>
-                    ))
+                  <div className="flex flex-wrap gap-1.5">
+                    {aiSuggestedTags.map((tag) => {
+                      const normalizedTagName = normalizeTagName(tag.name)
+                      const existingTag = normalizedTagMap.get(normalizedTagName)
+                      const isSelected = existingTag
+                        ? selectedTagIdSet.has(existingTag.id)
+                        : selectedNewTags.some((selectedTag) => normalizeTagName(selectedTag) === normalizedTagName)
+
+                      return (
+                        <button
+                          key={`${tag.name}-${tag.isNew ? 'new' : 'existing'}`}
+                          type="button"
+                          onClick={() => toggleTagByName(tag.name)}
+                          className={`text-xs px-2.5 py-1 rounded-full transition-colors border ${
+                            isSelected
+                              ? 'bg-primary text-primary-content border-primary'
+                              : 'bg-card border-border text-foreground hover:border-primary/50 hover:bg-primary/5'
+                          }`}
+                          disabled={isPending}
+                        >
+                          {tag.name}
+                          {tag.isNew && (
+                            <span
+                              className={`ml-1 text-[10px] italic uppercase tracking-widest ${
+                                isSelected ? 'text-primary-content/85' : 'text-info'
+                              }`}
+                            >
+                              {t('form.ai.newBadge')}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
                 )}
+              </div>
+
+              <div className="p-2.5 rounded-lg border border-emerald-500/25 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent min-h-[124px]">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{t('form.tagLibrary.title')}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{t('form.tagLibrary.hint')}</p>
+                  </div>
+                  <span className="px-2 py-0.5 text-[11px] rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-medium">
+                    {tags.length}
+                  </span>
+                </div>
+
+                <div
+                  ref={availableTagsScrollRef}
+                  onWheelCapture={handleAvailableTagsWheel}
+                  className="max-h-[140px] overflow-y-auto scrollbar-theme min-h-0 overscroll-contain pr-0.5"
+                  style={{ scrollbarGutter: 'stable' }}
+                >
+                  <div ref={availableTagsInnerRef} className="flex flex-wrap gap-1.5">
+                    {tags.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-1">
+                        {t('form.noTags')}
+                      </p>
+                    ) : (
+                      tags.map((tag) => {
+                        const isSelected = selectedTagIdSet.has(tag.id)
+
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onClick={() => toggleTag(tag.id)}
+                            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                              isSelected
+                                ? 'bg-primary text-primary-content border-primary'
+                                : 'bg-card border-border text-foreground hover:border-primary/50 hover:bg-primary/5'
+                            }`}
+                            disabled={isPending}
+                          >
+                            {tag.name}
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
