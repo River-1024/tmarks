@@ -62,7 +62,104 @@ function renderPromptTemplate(template: string, vars: PromptTemplateVars): strin
   )
 }
 
-function extractJsonPayload(content: string): AIResultPayload {
+function buildBatchSystemPrompt(basePrompt: string | undefined, bookmarkCount: number) {
+  const contract = `你正在执行 TMarks 的批量书签标签整理任务。
+
+最终输出必须严格遵循以下要求：
+1. 只允许输出一个合法 JSON 对象
+2. 顶层必须且只能是 {"items":[{"bookmark_id":"...","tags":["标签1","标签2"]}]}
+3. 禁止返回 suggestedTags、translatedTitle、translatedDescription、explanation、reasoning 或任何额外字段
+4. items 必须覆盖当前批次全部 ${bookmarkCount} 个书签
+5. 每个 item 必须包含 bookmark_id 和 tags
+6. tags 只能是字符串数组，返回 2-5 个简洁、可复用的中文标签
+7. 如果某个书签实在无法判断，也必须返回对应 bookmark_id，且 tags 设为空数组 []
+8. 禁止输出 Markdown、代码块、注释或自然语言说明`
+
+  return basePrompt ? `${basePrompt}\n\n${contract}` : contract
+}
+
+function buildCompactRetryPrompt(bookmarks: Bookmark[]) {
+  return `请只为下面书签返回最简 JSON，不要输出任何额外文本。
+
+返回格式：
+{"items":[{"bookmark_id":"...","tags":["标签1","标签2"]}]}
+
+要求：
+1. 必须覆盖全部 ${bookmarks.length} 个书签
+2. 每个 tags 返回 2-5 个中文标签
+3. 只保留最相关标签，优先复用现有标签
+4. 不要返回 suggestedTags 或其他字段
+
+书签列表：
+${bookmarks
+  .map(
+    (bookmark, index) =>
+      `${index + 1}. bookmark_id: ${bookmark.id}\ntitle: ${bookmark.title}\nurl: ${bookmark.url}\nexisting_tags: ${bookmark.tags.map((tag) => tag.name).join(', ')}`,
+  )
+  .join('\n\n')}`
+}
+
+function getStringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function extractTagsFromSuggestedTags(value: unknown) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return normalizeTags(
+    value
+      .map((tag) => {
+        if (typeof tag === 'string') {
+          return tag
+        }
+        if (isRecord(tag)) {
+          return getStringValue(tag.name)
+        }
+        return null
+      })
+      .filter((tag): tag is string => Boolean(tag)),
+  )
+}
+
+function normalizeParsedPayload(parsed: unknown, bookmarks: Bookmark[]): AIResultPayload {
+  if (Array.isArray(parsed)) {
+    return { items: parsed as AIResultItem[] }
+  }
+
+  if (!isRecord(parsed)) {
+    throw new Error('AI response is not a JSON object')
+  }
+
+  if (Array.isArray(parsed.items)) {
+    return { items: parsed.items as AIResultItem[] }
+  }
+
+  if ('suggestedTags' in parsed) {
+    if (bookmarks.length !== 1) {
+      throw new Error('AI returned suggestedTags format, but batch mode requires items format for every bookmark')
+    }
+
+    return {
+      items: [
+        {
+          bookmark_id: bookmarks[0]?.id,
+          url: bookmarks[0]?.url,
+          tags: extractTagsFromSuggestedTags(parsed.suggestedTags),
+        },
+      ],
+    }
+  }
+
+  throw new Error('No supported items or suggestedTags field found in AI response')
+}
+
+function extractJsonPayload(content: string, bookmarks: Bookmark[]): AIResultPayload {
   const trimmed = content.trim()
   const candidates: string[] = []
   const fenced = trimmed.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
@@ -91,12 +188,7 @@ function extractJsonPayload(content: string): AIResultPayload {
   for (const candidate of [...new Set(candidates)]) {
     try {
       const parsed = JSON.parse(normalizeJsonText(candidate)) as unknown
-      if (Array.isArray(parsed)) {
-        return { items: parsed as AIResultItem[] }
-      }
-      if (parsed && typeof parsed === 'object') {
-        return parsed as AIResultPayload
-      }
+      return normalizeParsedPayload(parsed, bookmarks)
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error))
     }
@@ -128,6 +220,40 @@ function summarizeBookmarksForLog(bookmarks: Bookmark[]) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function getAiFinishReason(raw: unknown) {
+  if (!isRecord(raw) || !Array.isArray(raw.choices) || raw.choices.length === 0) {
+    return null
+  }
+
+  const firstChoice = raw.choices[0]
+  if (!isRecord(firstChoice)) {
+    return null
+  }
+
+  return getStringValue(firstChoice.finish_reason)
+}
+
+function createAiParseError(error: unknown, finishReason: string | null, retried: boolean) {
+  if (finishReason === 'length') {
+    return new Error(
+      retried
+        ? 'AI 回复因输出长度限制被截断，自动紧凑重试后仍未得到完整 JSON。请缩短自定义 Prompt，或改用新的 items 格式模板后重试。'
+        : 'AI 回复因输出长度限制被截断，未能生成完整 JSON。请缩短自定义 Prompt，或改用新的 items 格式模板后重试。',
+    )
+  }
+
+  return new Error(getErrorMessage(error))
+}
+
+function shouldRetryAiParse(error: unknown, finishReason: string | null) {
+  if (finishReason === 'length') {
+    return true
+  }
+
+  const message = getErrorMessage(error)
+  return /suggestedtags|items format|supported items|no supported items/i.test(message)
 }
 
 function matchAiItem(
@@ -301,9 +427,10 @@ ${bookmarks
   .join('\n\n')}
 
 ${t('batch.ai.prompt.rules')}`
-      const systemPrompt = aiConfig.customPrompt
+      const renderedCustomPrompt = aiConfig.customPrompt
         ? renderPromptTemplate(aiConfig.customPrompt, templateVars)
         : undefined
+      const systemPrompt = buildBatchSystemPrompt(renderedCustomPrompt, bookmarks.length)
       const requestSummary = {
         provider: aiConfig.provider,
         model: aiConfig.model || null,
@@ -348,15 +475,17 @@ ${t('batch.ai.prompt.rules')}`
         throw error
       }
 
+      const initialFinishReason = getAiFinishReason(result.raw)
       let parsed: AIResultPayload
       try {
-        parsed = extractJsonPayload(result.content)
+        parsed = extractJsonPayload(result.content, bookmarks)
       } catch (error) {
         await writeOperationLogEntries([
           {
             event_type: 'ai.bookmarks.batch_regenerate.parse_failed',
             payload: {
               ...requestSummary,
+              finish_reason: initialFinishReason,
               error: getErrorMessage(error),
               response: {
                 content: result.content,
@@ -365,7 +494,87 @@ ${t('batch.ai.prompt.rules')}`
             },
           },
         ])
-        throw error
+
+        if (!shouldRetryAiParse(error, initialFinishReason)) {
+          throw createAiParseError(error, initialFinishReason, false)
+        }
+
+        const retryPrompt = buildCompactRetryPrompt(bookmarks)
+        const retrySystemPrompt = buildBatchSystemPrompt(undefined, bookmarks.length)
+        const retryRequestSummary = {
+          ...requestSummary,
+          prompt: retryPrompt,
+          system_prompt: retrySystemPrompt,
+          retry_from_finish_reason: initialFinishReason,
+        }
+
+        await writeOperationLogEntries([
+          {
+            event_type: 'ai.bookmarks.batch_regenerate.retry_started',
+            payload: retryRequestSummary,
+          },
+        ])
+
+        let retryResult: Awaited<ReturnType<typeof callAI>>
+        try {
+          retryResult = await callAI({
+            provider: aiConfig.provider,
+            apiKey: aiConfig.apiKey,
+            apiUrl: aiConfig.apiUrl,
+            model: aiConfig.model,
+            prompt: retryPrompt,
+            systemPrompt: retrySystemPrompt,
+            temperature: 0.2,
+            maxTokens: 2400,
+          })
+        } catch (retryError) {
+          await writeOperationLogEntries([
+            {
+              event_type: 'ai.bookmarks.batch_regenerate.retry_failed',
+              payload: {
+                ...retryRequestSummary,
+                error: getErrorMessage(retryError),
+              },
+            },
+          ])
+          throw createAiParseError(retryError, initialFinishReason, true)
+        }
+
+        const retryFinishReason = getAiFinishReason(retryResult.raw)
+        try {
+          parsed = extractJsonPayload(retryResult.content, bookmarks)
+          result = retryResult
+
+          await writeOperationLogEntries([
+            {
+              event_type: 'ai.bookmarks.batch_regenerate.retry_completed',
+              payload: {
+                ...retryRequestSummary,
+                finish_reason: retryFinishReason,
+                response: {
+                  content: retryResult.content,
+                  raw: retryResult.raw,
+                },
+              },
+            },
+          ])
+        } catch (retryParseError) {
+          await writeOperationLogEntries([
+            {
+              event_type: 'ai.bookmarks.batch_regenerate.retry_failed',
+              payload: {
+                ...retryRequestSummary,
+                finish_reason: retryFinishReason,
+                error: getErrorMessage(retryParseError),
+                response: {
+                  content: retryResult.content,
+                  raw: retryResult.raw,
+                },
+              },
+            },
+          ])
+          throw createAiParseError(retryParseError, retryFinishReason ?? initialFinishReason, true)
+        }
       }
 
       const items = parsed.items || []
@@ -393,6 +602,7 @@ ${t('batch.ai.prompt.rules')}`
           event_type: 'ai.bookmarks.batch_regenerate.completed',
           payload: {
             ...requestSummary,
+            finish_reason: getAiFinishReason(result.raw),
             parsed_item_count: items.length,
             response: {
               content: result.content,

@@ -75,6 +75,9 @@ function buildSummary(
     case 'ai.bookmarks.batch_regenerate.completed':
     case 'ai.bookmarks.batch_regenerate.request_failed':
     case 'ai.bookmarks.batch_regenerate.parse_failed':
+    case 'ai.bookmarks.batch_regenerate.retry_started':
+    case 'ai.bookmarks.batch_regenerate.retry_completed':
+    case 'ai.bookmarks.batch_regenerate.retry_failed':
       return summarizeAiBatchRegenerate(log.event_type, payload, isZh)
     case 'ai.bookmarks.item_generated':
       return summarizeAiGeneratedItem(payload, isZh)
@@ -419,6 +422,7 @@ function summarizeAiBatchRegenerate(
   const bookmarkCount = getNumber(payload.bookmark_count)
   const parsedItemCount = getNumber(payload.parsed_item_count)
   const error = getString(payload.error)
+  const finishReason = getString(payload.finish_reason)
   const lines: string[] = []
 
   if (provider || model) {
@@ -439,6 +443,18 @@ function summarizeAiBatchRegenerate(
 
   if (eventType.endsWith('started')) {
     lines.push(isZh ? 'AI 请求已发出' : 'AI request sent')
+  }
+
+  if (eventType.endsWith('retry_started')) {
+    lines.push(isZh ? '检测到输出被截断，已自动发起紧凑重试' : 'Detected truncated output, started compact retry automatically')
+  }
+
+  if (eventType.endsWith('retry_completed')) {
+    lines.push(isZh ? '紧凑重试成功并拿到可解析结果' : 'Compact retry succeeded with a parseable result')
+  }
+
+  if (finishReason) {
+    lines.push(`${isZh ? '结束原因' : 'Finish reason'}: ${finishReason}`)
   }
 
   if (error) {
@@ -712,6 +728,7 @@ function getTone(log: OperationLogEntry, payload: Record<string, unknown> | null
     log.event_type === 'tag.created' ||
     log.event_type === 'tag.merged' ||
     log.event_type === 'ai.bookmarks.batch_regenerate.completed' ||
+    log.event_type === 'ai.bookmarks.batch_regenerate.retry_completed' ||
     log.event_type === 'ai.bookmarks.item_generated' ||
     log.event_type === 'ai.bookmarks.batch_regenerate.apply_completed'
   ) {
@@ -808,6 +825,9 @@ function getEventLabel(eventType: string, isZh: boolean) {
     'ai.bookmarks.batch_regenerate.completed': isZh ? 'AI 整理完成' : 'AI regenerate completed',
     'ai.bookmarks.batch_regenerate.request_failed': isZh ? 'AI 请求失败' : 'AI request failed',
     'ai.bookmarks.batch_regenerate.parse_failed': isZh ? 'AI 解析失败' : 'AI parse failed',
+    'ai.bookmarks.batch_regenerate.retry_started': isZh ? 'AI 自动重试开始' : 'AI retry started',
+    'ai.bookmarks.batch_regenerate.retry_completed': isZh ? 'AI 自动重试完成' : 'AI retry completed',
+    'ai.bookmarks.batch_regenerate.retry_failed': isZh ? 'AI 自动重试失败' : 'AI retry failed',
     'ai.bookmarks.item_generated': isZh ? 'AI 书签回复' : 'AI bookmark reply',
     'ai.bookmarks.batch_regenerate.apply_started': isZh ? '应用 AI 标签' : 'Applying AI tags',
     'ai.bookmarks.batch_regenerate.apply_completed': isZh ? 'AI 标签已应用' : 'AI tags applied',
@@ -867,6 +887,8 @@ function getFieldLabel(field: string, isZh: boolean) {
     bookmarks: isZh ? '书签列表' : 'Bookmarks',
     created_tags: isZh ? '新增标签' : 'Created tags',
     parsed_item_count: isZh ? '解析条数' : 'Parsed items',
+    finish_reason: isZh ? '结束原因' : 'Finish reason',
+    retry_from_finish_reason: isZh ? '重试触发原因' : 'Retry trigger',
     error: isZh ? '错误' : 'Error',
   }
 
