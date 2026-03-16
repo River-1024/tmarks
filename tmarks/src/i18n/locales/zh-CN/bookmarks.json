@@ -34,6 +34,13 @@
     "trash": "回收站",
     "addBookmark": "新增书签"
   },
+  "sync": {
+    "saveNow": "保存同步",
+    "saving": "同步中...",
+    "saveSuccess": "已同步到数据库",
+    "saveFailed": "有 {{count}} 项同步失败，请重试",
+    "autoSaveSeconds": "自动保存(秒)"
+  },
   "empty": {
     "title": "暂无书签",
     "description": "点击右上角 \"新增书签\" 按钮开始收藏精彩内容",

@@ -34,6 +34,13 @@
     "trash": "Trash",
     "addBookmark": "Add bookmark"
   },
+  "sync": {
+    "saveNow": "Save Sync",
+    "saving": "Syncing...",
+    "saveSuccess": "Synced to database",
+    "saveFailed": "{{count}} sync operations failed. Please retry.",
+    "autoSaveSeconds": "Auto Save (s)"
+  },
   "empty": {
     "title": "No bookmarks yet",
     "description": "Click \"Add Bookmark\" button to start collecting",

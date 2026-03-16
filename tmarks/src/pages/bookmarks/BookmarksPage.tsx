@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback } from 'react'
+import { useMemo, useEffect, useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TagSidebar } from '@/components/tags/TagSidebar'
 import { BookmarkListContainer } from '@/components/bookmarks/BookmarkListContainer'
@@ -11,14 +11,30 @@ import { useBookmarksEffects } from './hooks/useBookmarksEffects'
 import { setStoredViewMode } from './hooks/useBookmarksState'
 import { useInfiniteBookmarks } from '@/hooks/useBookmarks'
 import { useTags } from '@/hooks/useTags'
-import type { Bookmark, BookmarkQueryParams } from '@/lib/types'
+import { useToastStore } from '@/stores/toastStore'
+import { bookmarksService } from '@/services/bookmarks'
+import type { Bookmark, BookmarkQueryParams, UpdateBookmarkRequest } from '@/lib/types'
 import type { SortOption } from '@/components/common/SortSelector'
+import { Save } from 'lucide-react'
 
 const SORT_OPTIONS: SortOption[] = ['created', 'updated', 'pinned', 'popular']
 const VIEW_MODES = ['list', 'card', 'minimal', 'title'] as const
 
 export function BookmarksPage() {
   const { t } = useTranslation('bookmarks')
+  const { success, error: showError } = useToastStore()
+  const pendingSyncOperationsRef = useRef<
+    Array<{ id: string; bookmarkId: string; run: () => Promise<unknown> }>
+  >([])
+  const [pendingSyncCount, setPendingSyncCount] = useState(0)
+  const [isSavingSync, setIsSavingSync] = useState(false)
+  const [autoSyncSeconds, setAutoSyncSeconds] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0
+    const saved = window.localStorage.getItem('bookmarks-auto-sync-seconds')
+    const parsed = saved ? Number(saved) : 0
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+  })
+  const [optimisticBookmarks, setOptimisticBookmarks] = useState<Record<string, Bookmark>>({})
   // 状态管理
   const state = useBookmarksState()
   const {
@@ -58,6 +74,22 @@ export function BookmarksPage() {
     tagDebounceTimerRef,
   } = state
 
+  const enqueueBookmarkUpdate = useCallback(
+    (payload: { id: string; data: UpdateBookmarkRequest; optimisticBookmark: Bookmark }) => {
+      pendingSyncOperationsRef.current.push({
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        bookmarkId: payload.id,
+        run: () => bookmarksService.updateBookmark(payload.id, payload.data),
+      })
+      setPendingSyncCount(pendingSyncOperationsRef.current.length)
+      setOptimisticBookmarks((prev) => ({
+        ...prev,
+        [payload.id]: payload.optimisticBookmark,
+      }))
+    },
+    []
+  )
+
   // 副作用管理
   const { updatePreferences } = useBookmarksEffects({
     selectedTags,
@@ -96,6 +128,83 @@ export function BookmarksPage() {
   const bookmarksQuery = useInfiniteBookmarks(queryParams)
   const { refetch: refetchTags } = useTags()
 
+  const flushPendingSync = useCallback(
+    async (trigger: 'manual' | 'auto' = 'manual') => {
+      if (isSavingSync || pendingSyncOperationsRef.current.length === 0) return
+
+      setIsSavingSync(true)
+      const operations = [...pendingSyncOperationsRef.current]
+      pendingSyncOperationsRef.current = []
+      setPendingSyncCount(0)
+
+      const failed: Array<{ id: string; bookmarkId: string; run: () => Promise<unknown> }> = []
+      const successIds = new Set<string>()
+
+      for (const op of operations) {
+        try {
+          await op.run()
+          successIds.add(op.bookmarkId)
+        } catch {
+          failed.push(op)
+        }
+      }
+
+      if (failed.length > 0) {
+        const failedBookmarkIds = new Set(failed.map((op) => op.bookmarkId))
+        pendingSyncOperationsRef.current = [...failed, ...pendingSyncOperationsRef.current]
+        setPendingSyncCount(pendingSyncOperationsRef.current.length)
+        setOptimisticBookmarks((prev) => {
+          const next = { ...prev }
+          successIds.forEach((id) => {
+            if (!failedBookmarkIds.has(id)) {
+              delete next[id]
+            }
+          })
+          return next
+        })
+        showError(t('sync.saveFailed', { count: failed.length }))
+      } else {
+        setOptimisticBookmarks((prev) => {
+          const next = { ...prev }
+          successIds.forEach((id) => {
+            delete next[id]
+          })
+          return next
+        })
+        if (trigger === 'manual') {
+          success(t('sync.saveSuccess'))
+        }
+      }
+
+      await bookmarksQuery.refetch()
+      setIsSavingSync(false)
+    },
+    [bookmarksQuery, isSavingSync, showError, success, t]
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('bookmarks-auto-sync-seconds', String(autoSyncSeconds))
+  }, [autoSyncSeconds])
+
+  useEffect(() => {
+    if (autoSyncSeconds <= 0) return
+    const timer = window.setInterval(() => {
+      void flushPendingSync('auto')
+    }, autoSyncSeconds * 1000)
+    return () => window.clearInterval(timer)
+  }, [autoSyncSeconds, flushPendingSync])
+
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (pendingSyncOperationsRef.current.length === 0) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
+
   // 书签列表（去重）
   const bookmarks = useMemo(() => {
     if (!bookmarksQuery.data?.pages?.length) {
@@ -127,6 +236,18 @@ export function BookmarksPage() {
     return Array.from(uniqueBookmarksMap.values())
   }, [bookmarksQuery.data])
 
+  const mergedBookmarks = useMemo(() => {
+    if (Object.keys(optimisticBookmarks).length === 0) return bookmarks
+    return bookmarks.map((bookmark) => {
+      const optimistic = optimisticBookmarks[bookmark.id]
+      if (!optimistic) return bookmark
+      return {
+        ...bookmark,
+        ...optimistic,
+      }
+    })
+  }, [bookmarks, optimisticBookmarks])
+
   // 从第一页的 meta 中获取后端返回的相关标签ID
   const serverRelatedTagIds = useMemo(() => {
     const firstPageMeta = bookmarksQuery.data?.pages?.[0]?.meta
@@ -135,12 +256,12 @@ export function BookmarksPage() {
 
   // 可见性过滤
   const filteredBookmarks = useMemo(() => {
-    if (visibilityFilter === 'all') return bookmarks
+    if (visibilityFilter === 'all') return mergedBookmarks
 
-    return bookmarks.filter((bookmark) =>
+    return mergedBookmarks.filter((bookmark) =>
       visibilityFilter === 'public' ? bookmark.is_public : !bookmark.is_public
     )
-  }, [bookmarks, visibilityFilter])
+  }, [mergedBookmarks, visibilityFilter])
 
   const isInitialLoading = bookmarksQuery.isLoading && bookmarks.length === 0
   const isFetchingExisting = bookmarksQuery.isFetching && !isInitialLoading
@@ -245,6 +366,44 @@ export function BookmarksPage() {
 
           {/* 右侧：书签列表 */}
           <main className="lg:col-span-9 lg:col-start-4 order-1 lg:order-2 flex flex-col h-full overflow-hidden w-full min-w-0">
+            <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 pt-2 w-full">
+              <div className="flex items-center justify-end gap-2">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">
+                  {t('sync.autoSaveSeconds')}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={5}
+                  value={autoSyncSeconds}
+                  onChange={(event) => {
+                    const next = Number(event.target.value)
+                    if (!Number.isFinite(next) || next < 0) {
+                      setAutoSyncSeconds(0)
+                      return
+                    }
+                    setAutoSyncSeconds(next)
+                  }}
+                  className="w-20 h-9 px-2 rounded-md border border-border bg-card text-sm text-foreground"
+                  title={t('sync.autoSaveSeconds')}
+                />
+                <button
+                  onClick={() => void flushPendingSync('manual')}
+                  disabled={pendingSyncCount === 0 || isSavingSync}
+                  className="btn btn-primary btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="button"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{isSavingSync ? t('sync.saving') : t('sync.saveNow')}</span>
+                  {pendingSyncCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded bg-primary-foreground/20 text-xs">
+                      {pendingSyncCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
             {/* 顶部操作栏 */}
             <TopActionBar
               searchMode={searchMode}
@@ -380,6 +539,7 @@ export function BookmarksPage() {
             bookmark={editingBookmark}
             onClose={handleCloseForm}
             onSuccess={handleFormSuccess}
+            onEnqueueUpdate={enqueueBookmarkUpdate}
           />
         )}
 

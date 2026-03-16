@@ -20,6 +20,11 @@ interface BookmarkFormProps {
   bookmark?: Bookmark | null
   onClose: () => void
   onSuccess?: () => void
+  onEnqueueUpdate?: (payload: {
+    id: string
+    data: UpdateBookmarkRequest
+    optimisticBookmark: Bookmark
+  }) => void
 }
 
 interface SinglePromptTemplateVars {
@@ -221,7 +226,7 @@ function getAiFinishReason(raw: unknown) {
   return getStringValue(firstChoice.finish_reason)
 }
 
-export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps) {
+export function BookmarkForm({ bookmark, onClose, onSuccess, onEnqueueUpdate }: BookmarkFormProps) {
   const { t } = useTranslation('bookmarks')
   const isEditing = !!bookmark
 
@@ -489,8 +494,38 @@ export function BookmarkForm({ bookmark, onClose, onSuccess }: BookmarkFormProps
           updateData.cover_image = coverImage.trim() ? coverImage.trim() : null
         }
 
-        const updatedBookmark = await updateBookmark.mutateAsync({ id: bookmark.id, data: updateData })
-        savedBookmarkId = updatedBookmark.id
+        if (onEnqueueUpdate) {
+          const optimisticTags = selectedTagNamesSnapshot.map((tagName, index) => ({
+            id: resolvedTagIds[index] || `local-${bookmark.id}-${index}`,
+            name: tagName,
+            color: null,
+          }))
+
+          const optimisticBookmark: Bookmark = {
+            ...bookmark,
+            title: updateData.title ?? bookmark.title,
+            url: updateData.url ?? bookmark.url,
+            description:
+              updateData.description !== undefined ? updateData.description : bookmark.description,
+            cover_image:
+              updateData.cover_image !== undefined ? updateData.cover_image : bookmark.cover_image,
+            is_pinned: updateData.is_pinned ?? bookmark.is_pinned,
+            is_archived: updateData.is_archived ?? bookmark.is_archived,
+            is_public: updateData.is_public ?? bookmark.is_public,
+            tags: optimisticTags,
+            updated_at: new Date().toISOString(),
+          }
+
+          onEnqueueUpdate({
+            id: bookmark.id,
+            data: updateData,
+            optimisticBookmark,
+          })
+          savedBookmarkId = bookmark.id
+        } else {
+          const updatedBookmark = await updateBookmark.mutateAsync({ id: bookmark.id, data: updateData })
+          savedBookmarkId = updatedBookmark.id
+        }
       } else {
         const createData: CreateBookmarkRequest = {
           title: title.trim(),
