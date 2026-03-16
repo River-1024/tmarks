@@ -4,6 +4,7 @@ import { success, badRequest, created, conflict, internalError } from '../../../
 import { requireAuth, AuthContext } from '../../../middleware/auth'
 import { sanitizeString } from '../../../lib/validation'
 import { generateUUID } from '../../../lib/crypto'
+import { writeAuditLog } from '../../../lib/audit-log'
 
 interface CreateTagRequest {
   name: string
@@ -65,6 +66,8 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
     try {
       const userId = context.data.user_id
       const body = await context.request.json() as CreateTagRequest
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
 
       if (!body.name) {
         return badRequest('Tag name is required')
@@ -98,6 +101,19 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
       const tag = await context.env.DB.prepare('SELECT * FROM tags WHERE id = ?')
         .bind(tagUuid)
         .first<Tag>()
+
+      await writeAuditLog(context.env.DB, {
+        userId,
+        eventType: 'tag.created',
+        ip,
+        userAgent,
+        payload: {
+          tag_id: tagUuid,
+          name,
+          color,
+          bookmark_count: 0,
+        },
+      })
 
       return created({ tag })
     } catch (error) {

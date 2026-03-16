@@ -9,8 +9,10 @@ import { useAiSettings } from '@/hooks/useAiSettings'
 import { useTags } from '@/hooks/useTags'
 import { tagsService } from '@/services/tags'
 import { bookmarksService } from '@/services/bookmarks'
+import { operationLogsService } from '@/services/operation-logs'
 import { callAI } from '@/lib/ai/client'
 import { BOOKMARKS_QUERY_KEY } from '@/hooks/useBookmarks'
+import type { OperationLogWriteEntry } from '@/lib/types'
 
 interface BatchAiRegenerateModalProps {
   isOpen: boolean
@@ -37,6 +39,12 @@ interface AIResultPayload {
   }>
 }
 
+interface AIResultItem {
+  bookmark_id?: string
+  url?: string
+  tags?: string[]
+}
+
 interface PromptTemplateVars {
   title: string
   url: string
@@ -56,21 +64,87 @@ function renderPromptTemplate(template: string, vars: PromptTemplateVars): strin
 
 function extractJsonPayload(content: string): AIResultPayload {
   const trimmed = content.trim()
+  const candidates: string[] = []
+  const fenced = trimmed.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
 
-  try {
-    return JSON.parse(trimmed) as AIResultPayload
-  } catch {
-    const match = trimmed.match(/\{[\s\S]*\}/)
-    if (!match) {
-      throw new Error('Invalid AI response')
-    }
-
-    return JSON.parse(match[0]) as AIResultPayload
+  if (trimmed) {
+    candidates.push(trimmed)
   }
+  if (fenced && fenced !== trimmed) {
+    candidates.push(fenced)
+  }
+
+  const objectStart = fenced.indexOf('{')
+  const objectEnd = fenced.lastIndexOf('}')
+  if (objectStart !== -1 && objectEnd > objectStart) {
+    candidates.push(fenced.slice(objectStart, objectEnd + 1))
+  }
+
+  const arrayStart = fenced.indexOf('[')
+  const arrayEnd = fenced.lastIndexOf(']')
+  if (arrayStart !== -1 && arrayEnd > arrayStart) {
+    candidates.push(fenced.slice(arrayStart, arrayEnd + 1))
+  }
+
+  let lastError: Error | null = null
+
+  for (const candidate of [...new Set(candidates)]) {
+    try {
+      const parsed = JSON.parse(normalizeJsonText(candidate)) as unknown
+      if (Array.isArray(parsed)) {
+        return { items: parsed as AIResultItem[] }
+      }
+      if (parsed && typeof parsed === 'object') {
+        return parsed as AIResultPayload
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  throw new Error(lastError?.message || 'Invalid AI response')
 }
 
 function normalizeTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].slice(0, 12)
+}
+
+function normalizeJsonText(content: string) {
+  return content
+    .trim()
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/\}(\s*)\{/g, '},$1{')
+}
+
+function summarizeBookmarksForLog(bookmarks: Bookmark[]) {
+  return bookmarks.map((bookmark) => ({
+    bookmark_id: bookmark.id,
+    title: bookmark.title,
+    url: bookmark.url,
+    description: bookmark.description || '',
+    existing_tags: bookmark.tags.map((tag) => tag.name),
+  }))
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function matchAiItem(
+  bookmark: Bookmark,
+  items: AIResultItem[],
+): { item: AIResultItem | null; matchedBy: 'bookmark_id' | 'url' | null } {
+  const byId = items.find((item) => item.bookmark_id === bookmark.id)
+  if (byId) {
+    return { item: byId, matchedBy: 'bookmark_id' }
+  }
+
+  const byUrl = items.find((item) => item.url === bookmark.url)
+  if (byUrl) {
+    return { item: byUrl, matchedBy: 'url' }
+  }
+
+  return { item: null, matchedBy: null }
 }
 
 export function BatchAiRegenerateModal({
@@ -176,6 +250,20 @@ export function BatchAiRegenerateModal({
     onClose()
   }
 
+  const writeOperationLogEntries = async (entries: OperationLogWriteEntry[]) => {
+    if (entries.length === 0) {
+      return
+    }
+
+    try {
+      for (let index = 0; index < entries.length; index += 100) {
+        await operationLogsService.writeEntries(entries.slice(index, index + 100))
+      }
+    } catch (error) {
+      console.error('[BatchAiRegenerateModal] Failed to write operation logs:', error)
+    }
+  }
+
   const handleGenerate = async () => {
     if (!aiConfig?.enabled || !aiConfig.apiKey) {
       setErrorMessage(t('batch.ai.errors.notConfigured'))
@@ -213,28 +301,111 @@ ${bookmarks
   .join('\n\n')}
 
 ${t('batch.ai.prompt.rules')}`
-
-      const result = await callAI({
+      const systemPrompt = aiConfig.customPrompt
+        ? renderPromptTemplate(aiConfig.customPrompt, templateVars)
+        : undefined
+      const requestSummary = {
         provider: aiConfig.provider,
-        apiKey: aiConfig.apiKey,
-        apiUrl: aiConfig.apiUrl,
-        model: aiConfig.model,
-        prompt,
-        systemPrompt: aiConfig.customPrompt
-          ? renderPromptTemplate(aiConfig.customPrompt, templateVars)
-          : undefined,
+        model: aiConfig.model || null,
+        api_url: aiConfig.apiUrl || null,
         temperature: 0.3,
-        maxTokens: 2400,
+        max_tokens: 2400,
+        bookmark_count: bookmarks.length,
+        bookmarks: summarizeBookmarksForLog(bookmarks),
+        prompt,
+        system_prompt: systemPrompt || null,
+      }
+
+      await writeOperationLogEntries([
+        {
+          event_type: 'ai.bookmarks.batch_regenerate.started',
+          payload: requestSummary,
+        },
+      ])
+
+      let result: Awaited<ReturnType<typeof callAI>>
+      try {
+        result = await callAI({
+          provider: aiConfig.provider,
+          apiKey: aiConfig.apiKey,
+          apiUrl: aiConfig.apiUrl,
+          model: aiConfig.model,
+          prompt,
+          systemPrompt,
+          temperature: 0.3,
+          maxTokens: 2400,
+        })
+      } catch (error) {
+        await writeOperationLogEntries([
+          {
+            event_type: 'ai.bookmarks.batch_regenerate.request_failed',
+            payload: {
+              ...requestSummary,
+              error: getErrorMessage(error),
+            },
+          },
+        ])
+        throw error
+      }
+
+      let parsed: AIResultPayload
+      try {
+        parsed = extractJsonPayload(result.content)
+      } catch (error) {
+        await writeOperationLogEntries([
+          {
+            event_type: 'ai.bookmarks.batch_regenerate.parse_failed',
+            payload: {
+              ...requestSummary,
+              error: getErrorMessage(error),
+              response: {
+                content: result.content,
+                raw: result.raw,
+              },
+            },
+          },
+        ])
+        throw error
+      }
+
+      const items = parsed.items || []
+      const itemLogEntries: OperationLogWriteEntry[] = bookmarks.map((bookmark) => {
+        const { item, matchedBy } = matchAiItem(bookmark, items)
+        const generatedTags = normalizeTags(item?.tags || bookmark.tags.map((tag) => tag.name))
+
+        return {
+          event_type: 'ai.bookmarks.item_generated',
+          payload: {
+            bookmark_id: bookmark.id,
+            title: bookmark.title,
+            url: bookmark.url,
+            existing_tags: bookmark.tags.map((tag) => tag.name),
+            generated_tags: generatedTags,
+            matched: Boolean(item),
+            matched_by: matchedBy,
+            ai_response_item: item,
+          },
+        }
       })
 
-      const parsed = extractJsonPayload(result.content)
-      const items = parsed.items || []
+      await writeOperationLogEntries([
+        {
+          event_type: 'ai.bookmarks.batch_regenerate.completed',
+          payload: {
+            ...requestSummary,
+            parsed_item_count: items.length,
+            response: {
+              content: result.content,
+              raw: result.raw,
+            },
+          },
+        },
+        ...itemLogEntries,
+      ])
 
       setDrafts(
         bookmarks.map((bookmark) => {
-          const matched = items.find(
-            (item) => item.bookmark_id === bookmark.id || item.url === bookmark.url
-          )
+          const { item: matched } = matchAiItem(bookmark, items)
 
           return {
             bookmarkId: bookmark.id,
@@ -267,8 +438,25 @@ ${t('batch.ai.prompt.rules')}`
 
   const handleApply = async () => {
     setIsApplying(true)
+    const createdTags: Array<{ tag_id: string; name: string }> = []
+    const appliedBookmarks: Array<{ bookmark_id: string; title: string; tags: string[] }> = []
+    let failedContext: Record<string, unknown> | null = null
 
     try {
+      await writeOperationLogEntries([
+        {
+          event_type: 'ai.bookmarks.batch_regenerate.apply_started',
+          payload: {
+            count: drafts.length,
+            bookmarks: drafts.map((draft) => ({
+              bookmark_id: draft.bookmarkId,
+              title: draft.title,
+              tags: draft.tags,
+            })),
+          },
+        },
+      ])
+
       const tagMap = new Map(existingTags.map((tag) => [tag.name.toLowerCase(), tag.id]))
 
       for (const draft of drafts) {
@@ -279,10 +467,16 @@ ${t('batch.ai.prompt.rules')}`
           try {
             const created = await tagsService.createTag({ name: tagName })
             tagMap.set(key, created.id)
+            createdTags.push({ tag_id: created.id, name: created.name })
           } catch {
             const latest = await tagsService.getTags({ sort: 'name' })
             const matched = latest.tags.find((tag) => tag.name.toLowerCase() === key)
             if (!matched) {
+              failedContext = {
+                stage: 'create_tag',
+                tag_name: tagName,
+                bookmark_id: draft.bookmarkId,
+              }
               throw new Error(t('batch.ai.errors.createTagFailed', { name: tagName }))
             }
             tagMap.set(key, matched.id)
@@ -295,17 +489,52 @@ ${t('batch.ai.prompt.rules')}`
           .map((tagName) => tagMap.get(tagName.toLowerCase()))
           .filter((id): id is string => Boolean(id))
 
+        failedContext = {
+          stage: 'update_bookmark',
+          bookmark_id: draft.bookmarkId,
+          title: draft.title,
+          tag_ids: tagIds,
+          tags: draft.tags,
+        }
         await bookmarksService.updateBookmark(draft.bookmarkId, { tag_ids: tagIds })
+        appliedBookmarks.push({
+          bookmark_id: draft.bookmarkId,
+          title: draft.title,
+          tags: draft.tags,
+        })
       }
 
       await queryClient.invalidateQueries({ queryKey: [BOOKMARKS_QUERY_KEY] })
       await queryClient.invalidateQueries({ queryKey: ['tags'] })
+
+      await writeOperationLogEntries([
+        {
+          event_type: 'ai.bookmarks.batch_regenerate.apply_completed',
+          payload: {
+            count: appliedBookmarks.length,
+            created_tags: createdTags,
+            bookmarks: appliedBookmarks,
+          },
+        },
+      ])
 
       setSuccessMessage(t('batch.ai.applySuccess', { count: drafts.length }))
       setShowSuccessAlert(true)
       setHasApplied(true)
       setStep(4)
     } catch (error) {
+      await writeOperationLogEntries([
+        {
+          event_type: 'ai.bookmarks.batch_regenerate.apply_failed',
+          payload: {
+            count: drafts.length,
+            created_tags: createdTags,
+            applied_bookmarks: appliedBookmarks,
+            failed_context: failedContext,
+            error: getErrorMessage(error),
+          },
+        },
+      ])
       setErrorMessage(error instanceof Error ? error.message : t('batch.ai.errors.applyFailed'))
       setShowErrorAlert(true)
     } finally {

@@ -3,10 +3,28 @@ import type { Env, Tag, RouteParams, SQLParam } from '../../../lib/types'
 import { success, badRequest, notFound, noContent, conflict, internalError } from '../../../lib/response'
 import { requireAuth, AuthContext } from '../../../middleware/auth'
 import { sanitizeString } from '../../../lib/validation'
+import { writeAuditLog } from '../../../lib/audit-log'
 
 interface UpdateTagRequest {
   name?: string
   color?: string
+}
+
+interface TagAuditSnapshot {
+  name: string
+  color: string | null
+}
+
+function buildTagAuditChanges(before: TagAuditSnapshot, after: TagAuditSnapshot) {
+  const fields: Array<keyof TagAuditSnapshot> = ['name', 'color']
+
+  return fields
+    .filter((field) => before[field] !== after[field])
+    .map((field) => ({
+      field,
+      before: before[field],
+      after: after[field],
+    }))
 }
 
 // PATCH /api/v1/tags/:id - 更新标签
@@ -17,6 +35,8 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
       const userId = context.data.user_id
       const tagId = context.params.id
       const body = await context.request.json() as UpdateTagRequest
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
 
       // 检查标签是否存在且属于当前用户
       const tag = await context.env.DB.prepare(
@@ -27,6 +47,11 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
 
       if (!tag) {
         return notFound('Tag not found')
+      }
+
+      const beforeSnapshot: TagAuditSnapshot = {
+        name: tag.name,
+        color: tag.color ?? null,
       }
 
       const updates: string[] = []
@@ -73,6 +98,26 @@ export const onRequestPatch: PagesFunction<Env, RouteParams, AuthContext>[] = [
         .bind(tagId)
         .first<Tag>()
 
+      if (updatedTag) {
+        const afterSnapshot: TagAuditSnapshot = {
+          name: updatedTag.name,
+          color: updatedTag.color ?? null,
+        }
+
+        await writeAuditLog(context.env.DB, {
+          userId,
+          eventType: 'tag.updated',
+          ip,
+          userAgent,
+          payload: {
+            tag_id: tagId,
+            before: beforeSnapshot,
+            after: afterSnapshot,
+            changes: buildTagAuditChanges(beforeSnapshot, afterSnapshot),
+          },
+        })
+      }
+
       return success({ tag: updatedTag })
     } catch (error) {
       console.error('Update tag error:', error)
@@ -88,17 +133,25 @@ export const onRequestDelete: PagesFunction<Env, RouteParams, AuthContext>[] = [
     try {
       const userId = context.data.user_id
       const tagId = context.params.id
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
 
       // 检查标签是否存在且属于当前用户
       const tag = await context.env.DB.prepare(
-        'SELECT id FROM tags WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
+        'SELECT * FROM tags WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
       )
         .bind(tagId, userId)
-        .first()
+        .first<Tag>()
 
       if (!tag) {
         return notFound('Tag not found')
       }
+
+      const bookmarkCountRow = await context.env.DB.prepare(
+        'SELECT COUNT(*) as count FROM bookmark_tags WHERE tag_id = ? AND user_id = ?'
+      )
+        .bind(tagId, userId)
+        .first<{ count: number }>()
 
       const now = new Date().toISOString()
 
@@ -111,6 +164,19 @@ export const onRequestDelete: PagesFunction<Env, RouteParams, AuthContext>[] = [
       await context.env.DB.prepare('DELETE FROM bookmark_tags WHERE tag_id = ?')
         .bind(tagId)
         .run()
+
+      await writeAuditLog(context.env.DB, {
+        userId,
+        eventType: 'tag.deleted',
+        ip,
+        userAgent,
+        payload: {
+          tag_id: tagId,
+          name: tag.name,
+          color: tag.color ?? null,
+          bookmark_count: Number(bookmarkCountRow?.count ?? 0),
+        },
+      })
 
       return noContent()
     } catch (error) {

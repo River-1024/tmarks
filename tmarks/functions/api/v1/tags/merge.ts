@@ -3,6 +3,7 @@ import type { Env, RouteParams, Tag } from '../../../lib/types'
 import { badRequest, internalError, success } from '../../../lib/response'
 import { requireAuth, type AuthContext } from '../../../middleware/auth'
 import { sanitizeString } from '../../../lib/validation'
+import { writeAuditLog } from '../../../lib/audit-log'
 
 interface MergeTagsRequest {
   tag_ids: string[]
@@ -21,6 +22,8 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
     try {
       const userId = context.data.user_id
       const body = (await context.request.json()) as MergeTagsRequest
+      const ip = context.request.headers.get('CF-Connecting-IP')
+      const userAgent = context.request.headers.get('User-Agent')
 
       if (!body.name?.trim()) {
         return badRequest('name is required')
@@ -83,6 +86,13 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
       const sourceTagIds = orderedTags
         .map((tag) => tag.id)
         .filter((id) => id !== targetTag.id)
+      const sourceTags = orderedTags
+        .filter((tag) => tag.id !== targetTag.id)
+        .map((tag) => ({
+          tag_id: tag.id,
+          name: tag.name,
+          color: tag.color ?? null,
+        }))
 
       const now = new Date().toISOString()
 
@@ -153,6 +163,28 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
         merged_tag: mergedTag,
         affected_count: sourceTagIds.length,
       }
+
+      await writeAuditLog(context.env.DB, {
+        userId,
+        eventType: 'tag.merged',
+        ip,
+        userAgent,
+        payload: {
+          affected_count: response.affected_count,
+          target_tag: {
+            tag_id: mergedTag.id,
+            name: mergedTag.name,
+            color: mergedTag.color ?? null,
+          },
+          before_target: {
+            tag_id: targetTag.id,
+            name: targetTag.name,
+            color: targetTag.color ?? null,
+          },
+          source_tags: sourceTags,
+          existing_named_target: Boolean(existingNamedTag),
+        },
+      })
 
       return success(response)
     } catch (error) {

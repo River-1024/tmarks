@@ -54,6 +54,15 @@ function buildSummary(
       return summarizeBookmarkLifecycle(payload, isZh)
     case 'bookmark.updated':
       return summarizeBookmarkUpdate(payload, isZh)
+    case 'tag.created':
+    case 'tag.deleted':
+      return summarizeTagLifecycle(payload, isZh)
+    case 'tag.updated':
+      return summarizeTagUpdate(payload, isZh)
+    case 'tag.batch_deleted':
+      return summarizeTagBatchDelete(payload, isZh)
+    case 'tag.merged':
+      return summarizeTagMerge(payload, isZh)
     case 'batch_create_bookmarks':
       return summarizeBatchCreate(payload, isZh)
     case 'batch_delete_bookmarks':
@@ -62,6 +71,17 @@ function buildSummary(
       return summarizeBatchUpdateTags(payload, isZh)
     case 'settings.ai.test_connection':
       return summarizeAiTest(payload, isZh)
+    case 'ai.bookmarks.batch_regenerate.started':
+    case 'ai.bookmarks.batch_regenerate.completed':
+    case 'ai.bookmarks.batch_regenerate.request_failed':
+    case 'ai.bookmarks.batch_regenerate.parse_failed':
+      return summarizeAiBatchRegenerate(log.event_type, payload, isZh)
+    case 'ai.bookmarks.item_generated':
+      return summarizeAiGeneratedItem(payload, isZh)
+    case 'ai.bookmarks.batch_regenerate.apply_started':
+    case 'ai.bookmarks.batch_regenerate.apply_completed':
+    case 'ai.bookmarks.batch_regenerate.apply_failed':
+      return summarizeAiApply(log.event_type, payload, isZh)
     case 'settings.ai.updated':
       return summarizeSettingsUpdate(payload, isZh)
     case 'settings.logs.debug':
@@ -173,6 +193,89 @@ function summarizeBookmarkUpdate(payload: Record<string, unknown>, isZh: boolean
   const url = getString(payload.url)
   if (url) {
     lines.push(`URL: ${truncate(url, 140)}`)
+  }
+
+  return lines
+}
+
+function summarizeTagLifecycle(payload: Record<string, unknown>, isZh: boolean) {
+  const name = getString(payload.name) || (isZh ? '未命名标签' : 'Untitled tag')
+  const bookmarkCount = getNumber(payload.bookmark_count)
+  const color = getString(payload.color)
+  const lines = [`${isZh ? '标签' : 'Tag'}: ${quoteValue(name)}`]
+
+  if (color) {
+    lines.push(`${isZh ? '颜色' : 'Color'}: ${color}`)
+  }
+
+  if (bookmarkCount !== null) {
+    lines.push(
+      isZh ? `关联 ${bookmarkCount} 个书签` : `Linked to ${bookmarkCount} bookmarks`,
+    )
+  }
+
+  return lines
+}
+
+function summarizeTagUpdate(payload: Record<string, unknown>, isZh: boolean) {
+  const before = isRecord(payload.before) ? payload.before : null
+  const after = isRecord(payload.after) ? payload.after : null
+  const currentName =
+    getString(after?.name) || getString(before?.name) || (isZh ? '未命名标签' : 'Untitled tag')
+  const changes = getChangeEntries(payload)
+  const lines = [`${isZh ? '标签' : 'Tag'}: ${quoteValue(currentName)}`]
+
+  if (changes.length > 0) {
+    changes.slice(0, 4).forEach((change) => {
+      lines.push(
+        `${getFieldLabel(change.field, isZh)}: ${formatFieldValue(change.field, change.before, isZh)} -> ${formatFieldValue(change.field, change.after, isZh)}`,
+      )
+    })
+  }
+
+  return lines
+}
+
+function summarizeTagBatchDelete(payload: Record<string, unknown>, isZh: boolean) {
+  const tags = getRecordArray(payload.tags)
+  const count = getNumber(payload.count) ?? tags.length
+  const tagNames = tags
+    .map((tag) => getString(tag.name))
+    .filter((name): name is string => Boolean(name))
+    .slice(0, 4)
+  const lines = [isZh ? `批量删除 ${count} 个标签` : `Deleted ${count} tags in batch`]
+
+  if (tagNames.length > 0) {
+    lines.push(`${isZh ? '标签' : 'Tags'}: ${tagNames.join(isZh ? '、' : ', ')}`)
+  }
+
+  return lines
+}
+
+function summarizeTagMerge(payload: Record<string, unknown>, isZh: boolean) {
+  const targetTag = isRecord(payload.target_tag) ? payload.target_tag : null
+  const beforeTarget = isRecord(payload.before_target) ? payload.before_target : null
+  const sourceTags = getRecordArray(payload.source_tags)
+  const affectedCount = getNumber(payload.affected_count)
+  const lines = [
+    `${isZh ? '目标标签' : 'Target tag'}: ${quoteValue(getString(targetTag?.name) || getString(beforeTarget?.name) || (isZh ? '未命名标签' : 'Untitled tag'))}`,
+  ]
+
+  if (beforeTarget && targetTag && getString(beforeTarget.name) !== getString(targetTag.name)) {
+    lines.push(
+      `${isZh ? '重命名' : 'Renamed'}: ${formatGenericValue(beforeTarget.name, isZh)} -> ${formatGenericValue(targetTag.name, isZh)}`,
+    )
+  }
+
+  if (sourceTags.length > 0) {
+    const names = sourceTags
+      .map((tag) => getString(tag.name))
+      .filter((name): name is string => Boolean(name))
+    lines.push(`${isZh ? '合并来源' : 'Merged from'}: ${names.join(isZh ? '、' : ', ')}`)
+  }
+
+  if (affectedCount !== null) {
+    lines.push(isZh ? `合并 ${affectedCount} 个标签` : `Merged ${affectedCount} tags`)
   }
 
   return lines
@@ -303,6 +406,106 @@ function summarizeAiTest(payload: Record<string, unknown>, isZh: boolean) {
   return lines.length > 0
     ? lines
     : [isZh ? '已执行 AI 连接测试' : 'AI connection test executed']
+}
+
+function summarizeAiBatchRegenerate(
+  eventType: string,
+  payload: Record<string, unknown>,
+  isZh: boolean,
+) {
+  const provider = getString(payload.provider)
+  const model = getString(payload.model)
+  const apiUrl = getString(payload.api_url)
+  const bookmarkCount = getNumber(payload.bookmark_count)
+  const parsedItemCount = getNumber(payload.parsed_item_count)
+  const error = getString(payload.error)
+  const lines: string[] = []
+
+  if (provider || model) {
+    lines.push(`${isZh ? '模型' : 'Model'}: ${[provider, model].filter(Boolean).join(' / ')}`)
+  }
+
+  if (bookmarkCount !== null) {
+    lines.push(isZh ? `处理 ${bookmarkCount} 个书签` : `Processing ${bookmarkCount} bookmarks`)
+  }
+
+  if (apiUrl) {
+    lines.push(`${isZh ? '接口' : 'Endpoint'}: ${truncate(apiUrl, 120)}`)
+  }
+
+  if (parsedItemCount !== null) {
+    lines.push(isZh ? `解析出 ${parsedItemCount} 条 AI 回复` : `Parsed ${parsedItemCount} AI items`)
+  }
+
+  if (eventType.endsWith('started')) {
+    lines.push(isZh ? 'AI 请求已发出' : 'AI request sent')
+  }
+
+  if (error) {
+    lines.push(`${isZh ? '错误' : 'Error'}: ${truncate(error, 180)}`)
+  }
+
+  return lines
+}
+
+function summarizeAiGeneratedItem(payload: Record<string, unknown>, isZh: boolean) {
+  const title = getString(payload.title) || (isZh ? '未命名书签' : 'Untitled bookmark')
+  const generatedTags = getStringArray(payload.generated_tags)
+  const existingTags = getStringArray(payload.existing_tags)
+  const matched = getBoolean(payload.matched)
+  const matchedBy = getString(payload.matched_by)
+  const lines = [`${isZh ? '书签' : 'Bookmark'}: ${quoteValue(title)}`]
+
+  if (generatedTags.length > 0) {
+    lines.push(`${isZh ? 'AI 标签' : 'AI tags'}: ${generatedTags.join(isZh ? '、' : ', ')}`)
+  }
+
+  if (matched === false) {
+    lines.push(isZh ? 'AI 回复未命中该书签，沿用了原标签' : 'No matching AI reply for this bookmark, kept original tags')
+  } else if (matchedBy) {
+    lines.push(`${isZh ? '匹配方式' : 'Matched by'}: ${matchedBy}`)
+  }
+
+  if (existingTags.length > 0) {
+    lines.push(`${isZh ? '原标签' : 'Original tags'}: ${existingTags.join(isZh ? '、' : ', ')}`)
+  }
+
+  return lines
+}
+
+function summarizeAiApply(eventType: string, payload: Record<string, unknown>, isZh: boolean) {
+  const count = getNumber(payload.count)
+  const error = getString(payload.error)
+  const createdTags = getRecordArray(payload.created_tags)
+  const lines: string[] = []
+
+  if (count !== null) {
+    lines.push(
+      eventType.endsWith('apply_started')
+        ? isZh
+          ? `准备应用到 ${count} 个书签`
+          : `Preparing to apply changes to ${count} bookmarks`
+        : isZh
+          ? `已处理 ${count} 个书签`
+          : `Processed ${count} bookmarks`,
+    )
+  }
+
+  if (createdTags.length > 0) {
+    const names = createdTags
+      .map((tag) => getString(tag.name))
+      .filter((name): name is string => Boolean(name))
+      .slice(0, 5)
+    if (names.length > 0) {
+      lines.push(`${isZh ? '新增标签' : 'Created tags'}: ${names.join(isZh ? '、' : ', ')}`)
+    }
+  }
+
+  if (error) {
+    lines.push(`${isZh ? '错误' : 'Error'}: ${truncate(error, 180)}`)
+  }
+
+  return lines
 }
 
 function summarizeSettingsUpdate(payload: Record<string, unknown>, isZh: boolean) {
@@ -493,7 +696,9 @@ function getTone(log: OperationLogEntry, payload: Record<string, unknown> | null
   if (
     log.event_type === 'bookmark.deleted' ||
     log.event_type === 'bookmark.permanently_deleted' ||
-    log.event_type === 'batch_delete_bookmarks'
+    log.event_type === 'batch_delete_bookmarks' ||
+    log.event_type === 'tag.deleted' ||
+    log.event_type === 'tag.batch_deleted'
   ) {
     return 'warning'
   }
@@ -503,7 +708,12 @@ function getTone(log: OperationLogEntry, payload: Record<string, unknown> | null
     log.event_type === 'bookmark.restored' ||
     log.event_type === 'auth.login_success' ||
     log.event_type === 'settings.ai.test_connection' ||
-    log.event_type === 'user.registered'
+    log.event_type === 'user.registered' ||
+    log.event_type === 'tag.created' ||
+    log.event_type === 'tag.merged' ||
+    log.event_type === 'ai.bookmarks.batch_regenerate.completed' ||
+    log.event_type === 'ai.bookmarks.item_generated' ||
+    log.event_type === 'ai.bookmarks.batch_regenerate.apply_completed'
   ) {
     return 'success'
   }
@@ -586,9 +796,22 @@ function getEventLabel(eventType: string, isZh: boolean) {
     'bookmark.deleted': isZh ? '删除书签' : 'Bookmark deleted',
     'bookmark.restored': isZh ? '恢复书签' : 'Bookmark restored',
     'bookmark.permanently_deleted': isZh ? '永久删除书签' : 'Bookmark permanently deleted',
+    'tag.created': isZh ? '创建标签' : 'Tag created',
+    'tag.updated': isZh ? '修改标签' : 'Tag updated',
+    'tag.deleted': isZh ? '删除标签' : 'Tag deleted',
+    'tag.batch_deleted': isZh ? '批量删除标签' : 'Batch tag deletion',
+    'tag.merged': isZh ? '合并标签' : 'Tags merged',
     batch_create_bookmarks: isZh ? '批量创建书签' : 'Batch bookmark creation',
     batch_delete_bookmarks: isZh ? '批量删除书签' : 'Batch bookmark deletion',
     batch_update_tags: isZh ? '批量更新标签' : 'Batch tag update',
+    'ai.bookmarks.batch_regenerate.started': isZh ? 'AI 整理开始' : 'AI regenerate started',
+    'ai.bookmarks.batch_regenerate.completed': isZh ? 'AI 整理完成' : 'AI regenerate completed',
+    'ai.bookmarks.batch_regenerate.request_failed': isZh ? 'AI 请求失败' : 'AI request failed',
+    'ai.bookmarks.batch_regenerate.parse_failed': isZh ? 'AI 解析失败' : 'AI parse failed',
+    'ai.bookmarks.item_generated': isZh ? 'AI 书签回复' : 'AI bookmark reply',
+    'ai.bookmarks.batch_regenerate.apply_started': isZh ? '应用 AI 标签' : 'Applying AI tags',
+    'ai.bookmarks.batch_regenerate.apply_completed': isZh ? 'AI 标签已应用' : 'AI tags applied',
+    'ai.bookmarks.batch_regenerate.apply_failed': isZh ? '应用 AI 标签失败' : 'Applying AI tags failed',
     'settings.ai.updated': isZh ? '更新 AI 设置' : 'AI settings updated',
     'settings.ai.test_connection': isZh ? 'AI 请求测试' : 'AI request test',
     'settings.logs.debug': isZh ? '写入调试日志' : 'Debug log written',
@@ -632,6 +855,19 @@ function getFieldLabel(field: string, isZh: boolean) {
     bookmark_ids: isZh ? '书签 ID' : 'Bookmark IDs',
     add_tag_ids: isZh ? '新增标签' : 'Added tags',
     remove_tag_ids: isZh ? '移除标签' : 'Removed tags',
+    name: isZh ? '名称' : 'Name',
+    color: isZh ? '颜色' : 'Color',
+    bookmark_count: isZh ? '关联书签数' : 'Bookmark count',
+    target_tag: isZh ? '目标标签' : 'Target tag',
+    source_tags: isZh ? '来源标签' : 'Source tags',
+    matched: isZh ? '是否命中' : 'Matched',
+    matched_by: isZh ? '匹配方式' : 'Matched by',
+    existing_tags: isZh ? '原标签' : 'Original tags',
+    generated_tags: isZh ? 'AI 标签' : 'AI tags',
+    bookmarks: isZh ? '书签列表' : 'Bookmarks',
+    created_tags: isZh ? '新增标签' : 'Created tags',
+    parsed_item_count: isZh ? '解析条数' : 'Parsed items',
+    error: isZh ? '错误' : 'Error',
   }
 
   return labels[field] ?? field

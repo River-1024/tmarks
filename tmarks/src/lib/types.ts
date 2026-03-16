@@ -487,3 +487,12 @@ export interface OperationLogsResponse {
     } | null
   }
 }
+
+export interface OperationLogWriteEntry {
+  event_type: string
+  payload?: unknown
+}
+
+export interface OperationLogsWriteRequest {
+  entries: OperationLogWriteEntry[]
+}

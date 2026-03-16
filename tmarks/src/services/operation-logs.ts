@@ -1,5 +1,9 @@
 import { apiClient } from '@/lib/api-client'
-import type { OperationLogsResponse } from '@/lib/types'
+import type {
+  OperationLogsResponse,
+  OperationLogsWriteRequest,
+  OperationLogWriteEntry,
+} from '@/lib/types'
 
 export const operationLogsService = {
   async getLogs(limit = 50): Promise<OperationLogsResponse> {
@@ -9,6 +13,11 @@ export const operationLogsService = {
 
   async writeDebugLog(): Promise<void> {
     await apiClient.post('/settings/logs')
+  },
+
+  async writeEntries(entries: OperationLogWriteEntry[]): Promise<void> {
+    const payload: OperationLogsWriteRequest = { entries }
+    await apiClient.post('/settings/logs', payload)
   },
 
   async clearLogs(): Promise<void> {

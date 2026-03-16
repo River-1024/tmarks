@@ -23,11 +23,22 @@ interface UserOperationLogPreferences {
   operation_log_max_entries: number | null
 }
 
+interface WriteOperationLogEntryRequest {
+  event_type: string
+  payload?: unknown
+}
+
+interface WriteOperationLogsRequest {
+  entries: WriteOperationLogEntryRequest[]
+}
+
 const API_VERSION = 'settings.logs.v1'
 const DEFAULT_RETENTION_DAYS = 30
 const DEFAULT_MAX_ENTRIES = 1000
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
+
+class OperationLogInputError extends Error {}
 
 function getPreferenceNumber(value: number | null | undefined, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -128,6 +139,58 @@ function getLimit(request: Request) {
   return limit
 }
 
+async function readJsonBody(request: Request): Promise<unknown | null> {
+  const text = await request.text()
+  if (!text.trim()) {
+    return null
+  }
+
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    throw new OperationLogInputError('Invalid JSON body')
+  }
+}
+
+function isValidEventType(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length >= 3 &&
+    value.trim().length <= 120 &&
+    /^[a-zA-Z0-9._:-]+$/.test(value.trim())
+  )
+}
+
+function parseWriteEntries(body: unknown) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return null
+  }
+
+  const entries = (body as WriteOperationLogsRequest).entries
+  if (!Array.isArray(entries)) {
+    return null
+  }
+
+  if (entries.length === 0 || entries.length > 100) {
+    throw new OperationLogInputError('entries must contain between 1 and 100 items')
+  }
+
+  return entries.map((entry, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new OperationLogInputError(`entries[${index}] must be an object`)
+    }
+
+    if (!isValidEventType(entry.event_type)) {
+      throw new OperationLogInputError(`entries[${index}].event_type is invalid`)
+    }
+
+    return {
+      eventType: entry.event_type.trim(),
+      payload: 'payload' in entry ? entry.payload : undefined,
+    }
+  })
+}
+
 // GET /api/v1/settings/logs - 获取当前用户的操作日志和调试信息
 export const onRequestGet: PagesFunction<Env, RouteParams, AuthContext>[] = [
   requireAuth,
@@ -213,6 +276,33 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
         return badRequest('Operation logs feature not available. Please run database migrations.')
       }
 
+      const body = await readJsonBody(context.request)
+
+      if (body !== null) {
+        const entries = parseWriteEntries(body)
+        if (!entries) {
+          return badRequest('Body must include an entries array')
+        }
+
+        const ip = context.request.headers.get('CF-Connecting-IP')
+        const userAgent = context.request.headers.get('User-Agent')
+
+        for (const entry of entries) {
+          await writeAuditLog(context.env.DB, {
+            userId,
+            eventType: entry.eventType,
+            ip,
+            userAgent,
+            payload: entry.payload,
+          })
+        }
+
+        return success({
+          ok: true,
+          written: entries.length,
+        })
+      }
+
       await writeAuditLog(context.env.DB, {
         userId,
         eventType: 'settings.logs.debug',
@@ -229,8 +319,11 @@ export const onRequestPost: PagesFunction<Env, RouteParams, AuthContext>[] = [
         ok: true,
       })
     } catch (error) {
+      if (error instanceof OperationLogInputError) {
+        return badRequest(error.message)
+      }
       console.error('Write operation debug log error:', error)
-      return internalError('Failed to write test log')
+      return internalError('Failed to write operation logs')
     }
   },
 ]

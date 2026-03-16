@@ -619,7 +619,7 @@
     "infoBox": {
       "title": "Usage Guide",
       "tip1": "API Key is stored in plain text and shown in settings, use only in trusted environments",
-      "tip2": "AI calls are made directly from browser, data doesn't pass through TMarks server",
+      "tip2": "AI requests still go directly from the browser to the model provider; when operation logs are enabled, TMarks also stores request summaries, reply content, and parse errors for troubleshooting",
       "tip3": "Recommended: DeepSeek or gpt-4o-mini for best value",
       "tip4": "Processing 100 bookmarks costs about $0.01-0.05"
     }
