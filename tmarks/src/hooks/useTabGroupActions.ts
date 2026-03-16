@@ -22,6 +22,7 @@ interface UseTabGroupActionsProps {
     message: string
     onConfirm: () => void
   }
+  enqueueSyncOperation?: (operation: { description: string; run: () => Promise<unknown> }) => void
 }
 
 export function useTabGroupActions({
@@ -29,6 +30,7 @@ export function useTabGroupActions({
   setDeletingId,
   setConfirmDialog,
   confirmDialog,
+  enqueueSyncOperation,
 }: UseTabGroupActionsProps) {
   const { t, i18n } = useTranslation('tabGroups')
   const { success, error: showError } = useToastStore()
@@ -59,7 +61,14 @@ export function useTabGroupActions({
         setConfirmDialog({ ...confirmDialog, isOpen: false })
         setDeletingId(id)
         try {
-          await tabGroupsService.deleteTabGroup(id)
+          if (enqueueSyncOperation) {
+            enqueueSyncOperation({
+              description: `delete-tab-group:${id}`,
+              run: () => tabGroupsService.deleteTabGroup(id),
+            })
+          } else {
+            await tabGroupsService.deleteTabGroup(id)
+          }
           setTabGroups((prev) => prev.filter((g) => g.id !== id))
           success(t('message.movedToTrash'))
         } catch (err) {
@@ -149,10 +158,19 @@ export function useTabGroupActions({
       return
     }
 
+    const nextTitle = editingGroupTitle.trim()
+
     try {
-      await tabGroupsService.updateTabGroup(groupId, { title: editingGroupTitle })
+      if (enqueueSyncOperation) {
+        enqueueSyncOperation({
+          description: `update-tab-group-title:${groupId}`,
+          run: () => tabGroupsService.updateTabGroup(groupId, { title: nextTitle }),
+        })
+      } else {
+        await tabGroupsService.updateTabGroup(groupId, { title: nextTitle })
+      }
       setTabGroups((prev) =>
-        prev.map((g) => (g.id === groupId ? { ...g, title: editingGroupTitle } : g))
+        prev.map((g) => (g.id === groupId ? { ...g, title: nextTitle } : g))
       )
       setEditingGroupId(null)
       setEditingGroupTitle('')
@@ -174,15 +192,24 @@ export function useTabGroupActions({
       return
     }
 
+    const nextTitle = editingTitle.trim()
+
     try {
-      await tabGroupsService.updateTabGroupItem(itemId, { title: editingTitle })
+      if (enqueueSyncOperation) {
+        enqueueSyncOperation({
+          description: `update-tab-item-title:${itemId}`,
+          run: () => tabGroupsService.updateTabGroupItem(itemId, { title: nextTitle }),
+        })
+      } else {
+        await tabGroupsService.updateTabGroupItem(itemId, { title: nextTitle })
+      }
       setTabGroups((prev) =>
         prev.map((group) =>
           group.id === groupId
             ? {
               ...group,
               items: group.items?.map((item) =>
-                item.id === itemId ? { ...item, title: editingTitle } : item
+                item.id === itemId ? { ...item, title: nextTitle } : item
               ),
             }
             : group
@@ -200,7 +227,14 @@ export function useTabGroupActions({
   const handleTogglePin = async (groupId: string, itemId: string, currentPinned: boolean) => {
     const newPinned = !currentPinned
     try {
-      await tabGroupsService.updateTabGroupItem(itemId, { is_pinned: newPinned })
+      if (enqueueSyncOperation) {
+        enqueueSyncOperation({
+          description: `update-tab-item-pin:${itemId}`,
+          run: () => tabGroupsService.updateTabGroupItem(itemId, { is_pinned: newPinned }),
+        })
+      } else {
+        await tabGroupsService.updateTabGroupItem(itemId, { is_pinned: newPinned })
+      }
       setTabGroups((prev) =>
         prev.map((group) =>
           group.id === groupId
@@ -223,7 +257,14 @@ export function useTabGroupActions({
   const handleToggleTodo = async (groupId: string, itemId: string, currentTodo: boolean) => {
     const newTodo = !currentTodo
     try {
-      await tabGroupsService.updateTabGroupItem(itemId, { is_todo: newTodo })
+      if (enqueueSyncOperation) {
+        enqueueSyncOperation({
+          description: `update-tab-item-todo:${itemId}`,
+          run: () => tabGroupsService.updateTabGroupItem(itemId, { is_todo: newTodo }),
+        })
+      } else {
+        await tabGroupsService.updateTabGroupItem(itemId, { is_todo: newTodo })
+      }
       setTabGroups((prev) =>
         prev.map((group) =>
           group.id === groupId
@@ -251,7 +292,14 @@ export function useTabGroupActions({
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, isOpen: false })
         try {
-          await tabGroupsService.deleteTabGroupItem(itemId)
+          if (enqueueSyncOperation) {
+            enqueueSyncOperation({
+              description: `delete-tab-item:${itemId}`,
+              run: () => tabGroupsService.deleteTabGroupItem(itemId),
+            })
+          } else {
+            await tabGroupsService.deleteTabGroupItem(itemId)
+          }
           setTabGroups((prev) =>
             prev.map((group) =>
               group.id === groupId

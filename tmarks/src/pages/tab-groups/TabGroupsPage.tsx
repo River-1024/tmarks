@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { tabGroupsService } from '@/services/tab-groups'
 import { logger } from '@/lib/logger'
@@ -37,10 +37,13 @@ import { useIsMobile, useIsDesktop } from '@/hooks/useMediaQuery'
 import { Drawer } from '@/components/common/Drawer'
 import { BottomNav } from '@/components/common/BottomNav'
 import { MobileHeader } from '@/components/common/MobileHeader'
+import { useToastStore } from '@/stores/toastStore'
+import { Save } from 'lucide-react'
 
 export function TabGroupsPage() {
   const { t } = useTranslation('tabGroups')
   const { t: tc } = useTranslation('common')
+  const { success, error: showError } = useToastStore()
   const [tabGroups, setTabGroups] = useState<TabGroup[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +57,15 @@ export function TabGroupsPage() {
   const [sharingGroupId, setSharingGroupId] = useState<string | null>(null)
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const searchCleanupTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const pendingSyncOperationsRef = useRef<Array<{ id: string; description: string; run: () => Promise<unknown> }>>([])
+  const [pendingSyncCount, setPendingSyncCount] = useState(0)
+  const [isSavingSync, setIsSavingSync] = useState(false)
+  const [autoSyncSeconds, setAutoSyncSeconds] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0
+    const saved = window.localStorage.getItem('tab-groups-auto-sync-seconds')
+    const parsed = saved ? Number(saved) : 0
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+  })
 
   // 移动端状态
   const isMobile = useIsMobile()
@@ -87,6 +99,14 @@ export function TabGroupsPage() {
     onConfirm: () => {},
   })
 
+  function enqueueSyncOperation(operation: { description: string; run: () => Promise<unknown> }) {
+    pendingSyncOperationsRef.current.push({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      ...operation,
+    })
+    setPendingSyncCount(pendingSyncOperationsRef.current.length)
+  }
+
   // Use custom hooks
   const {
     editingItemId,
@@ -112,6 +132,7 @@ export function TabGroupsPage() {
     setDeletingId,
     setConfirmDialog,
     confirmDialog,
+    enqueueSyncOperation,
   })
 
   const {
@@ -127,6 +148,7 @@ export function TabGroupsPage() {
     setSelectedItems,
     setConfirmDialog,
     confirmDialog,
+    enqueueSyncOperation,
   })
 
   // 拖拽传感器
@@ -141,6 +163,65 @@ export function TabGroupsPage() {
 
   useEffect(() => {
     loadTabGroups()
+  }, [])
+
+  const flushPendingSync = useCallback(
+    async (trigger: 'manual' | 'auto' = 'manual') => {
+      if (isSavingSync || pendingSyncOperationsRef.current.length === 0) return
+
+      setIsSavingSync(true)
+      const operations = [...pendingSyncOperationsRef.current]
+      pendingSyncOperationsRef.current = []
+      setPendingSyncCount(0)
+
+      const failed: Array<{ id: string; description: string; run: () => Promise<unknown> }> = []
+
+      for (const op of operations) {
+        try {
+          await op.run()
+        } catch (err) {
+          logger.error(`[TabGroupsPage] Sync failed: ${op.description}`, err)
+          failed.push(op)
+        }
+      }
+
+      if (failed.length > 0) {
+        pendingSyncOperationsRef.current = [...failed, ...pendingSyncOperationsRef.current]
+        setPendingSyncCount(pendingSyncOperationsRef.current.length)
+        showError(t('sync.saveFailed', { count: failed.length }))
+      } else {
+        if (trigger === 'manual') {
+          success(t('sync.saveSuccess'))
+        }
+        await loadTabGroups()
+      }
+
+      setIsSavingSync(false)
+    },
+    [isSavingSync, showError, success, t]
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('tab-groups-auto-sync-seconds', String(autoSyncSeconds))
+  }, [autoSyncSeconds])
+
+  useEffect(() => {
+    if (autoSyncSeconds <= 0) return
+    const timer = window.setInterval(() => {
+      void flushPendingSync('auto')
+    }, autoSyncSeconds * 1000)
+    return () => window.clearInterval(timer)
+  }, [autoSyncSeconds, flushPendingSync])
+
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (pendingSyncOperationsRef.current.length === 0) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
 
   // 搜索防抖：延迟300ms更新实际搜索关键词
@@ -184,7 +265,7 @@ export function TabGroupsPage() {
     }
   }, [searchQuery, preferences?.enable_search_auto_clear, preferences?.search_auto_clear_seconds])
 
-  const loadTabGroups = async () => {
+  async function loadTabGroups() {
     try {
       setIsLoading(true)
       setError(null)
@@ -205,6 +286,11 @@ export function TabGroupsPage() {
 
   // 只刷新左侧树形列表，不影响中间和右侧列
   const refreshTreeOnly = async () => {
+    if (pendingSyncOperationsRef.current.length > 0) {
+      showError(t('sync.pendingRefreshBlocked'))
+      return
+    }
+
     try {
       const groups = await tabGroupsService.getAllTabGroups()
       // 保持当前选中的分组不变
@@ -228,9 +314,8 @@ export function TabGroupsPage() {
 
   const handleCreateFolder = async () => {
     try {
-      await tabGroupsService.createFolder(t('folder.newFolder'))
-      // 只刷新左侧树形列表
-      await refreshTreeOnly()
+      const newFolder = await tabGroupsService.createFolder(t('folder.newFolder'))
+      setTabGroups((prev) => [...prev, { ...newFolder, items: newFolder.items || [] }])
     } catch (err) {
       logger.error('Failed to create folder:', err)
       setError(t('page.createFolderFailed'))
@@ -238,69 +323,77 @@ export function TabGroupsPage() {
   }
 
   const handleRenameGroup = async (groupId: string, newTitle: string) => {
-    try {
-      await tabGroupsService.updateTabGroup(groupId, { title: newTitle })
-      // 只刷新左侧树形列表
-      await refreshTreeOnly()
-    } catch (err) {
-      logger.error('Failed to rename group:', err)
-      setError(t('page.renameFailed'))
-    }
+    const title = newTitle.trim()
+    if (!title) return
+
+    setTabGroups((prev) =>
+      prev.map((group) => (group.id === groupId ? { ...group, title } : group))
+    )
+    enqueueSyncOperation({
+      description: `rename-group:${groupId}`,
+      run: () => tabGroupsService.updateTabGroup(groupId, { title }),
+    })
   }
 
   const handleMoveGroup = async (groupId: string, newParentId: string | null, newPosition: number) => {
-    try {
-      logger.log('📦 handleMoveGroup:', { groupId, newParentId, newPosition })
+    logger.log('📦 handleMoveGroup:', { groupId, newParentId, newPosition })
 
-      // 获取拖拽项
-      const draggedGroup = tabGroups.find(g => g.id === groupId)
-      if (!draggedGroup) {
-        logger.error('Dragged group not found')
-        return
-      }
+    // 获取拖拽项
+    const draggedGroup = tabGroups.find(g => g.id === groupId)
+    if (!draggedGroup) {
+      logger.error('Dragged group not found')
+      return
+    }
 
-      // 获取同级所有项（包括拖拽项）
-      const siblings = tabGroups.filter(g =>
-        (g.parent_id || null) === newParentId
-      )
+    // 获取同级所有项（包括拖拽项）
+    const siblings = tabGroups.filter(g =>
+      (g.parent_id || null) === newParentId
+    )
 
-      // 按当前 position 排序
-      siblings.sort((a, b) => (a.position || 0) - (b.position || 0))
+    // 按当前 position 排序
+    siblings.sort((a, b) => (a.position || 0) - (b.position || 0))
 
-      // 移除拖拽项（如果在同级中）
-      const draggedIndex = siblings.findIndex(g => g.id === groupId)
-      if (draggedIndex !== -1) {
-        siblings.splice(draggedIndex, 1)
-      }
+    // 移除拖拽项（如果在同级中）
+    const draggedIndex = siblings.findIndex(g => g.id === groupId)
+    if (draggedIndex !== -1) {
+      siblings.splice(draggedIndex, 1)
+    }
 
-      // 插入到新位置
-      siblings.splice(newPosition, 0, draggedGroup)
+    // 插入到新位置
+    siblings.splice(newPosition, 0, draggedGroup)
 
-      // 重新分配 position（从 0 开始）
-      const updates = siblings.map((g, index) => ({
-        id: g.id,
-        position: index,
-        parent_id: newParentId
-      }))
+    // 重新分配 position（从 0 开始）
+    const updates = siblings.map((g, index) => ({
+      id: g.id,
+      position: index,
+      parent_id: newParentId
+    }))
 
-      logger.log('  → Reordering', updates.length, 'items')
+    logger.log('  → Reordering', updates.length, 'items')
 
-      // 批量更新
-      await Promise.all(
-        updates.map(update =>
+    const updateMap = new Map(updates.map((item) => [item.id, item]))
+    setTabGroups((prev) =>
+      prev.map((group) => {
+        const update = updateMap.get(group.id)
+        if (!update) return group
+        return {
+          ...group,
+          parent_id: update.parent_id,
+          position: update.position,
+        }
+      })
+    )
+
+    updates.forEach((update) => {
+      enqueueSyncOperation({
+        description: `move-group:${update.id}`,
+        run: () =>
           tabGroupsService.updateTabGroup(update.id, {
             position: update.position,
-            parent_id: update.parent_id
-          })
-        )
-      )
-
-      // 只刷新左侧树形列表，不影响中间和右侧列
-      await refreshTreeOnly()
-    } catch (err) {
-      logger.error('Failed to move group:', err)
-      setError(t('page.moveFailed'))
-    }
+            parent_id: update.parent_id,
+          }),
+      })
+    })
   }
 
   const handleItemClick = (item: TabGroupItem, e: React.MouseEvent | React.ChangeEvent<HTMLInputElement>) => {
@@ -390,22 +483,12 @@ export function TabGroupsPage() {
         )
       )
 
-      // Update positions in backend
-      try {
-        await Promise.all(
-          newItems.map((item: TabGroupItem, index: number) =>
-            tabGroupsService.updateTabGroupItem(item.id, { position: index })
-          )
-        )
-      } catch (err) {
-        logger.error('Failed to update positions:', err)
-        // Revert on error
-        setTabGroups((prev) =>
-          prev.map((g) =>
-            g.id === sourceGroup.id ? { ...g, items: sourceGroup.items } : g
-          )
-        )
-      }
+      newItems.forEach((item: TabGroupItem, index: number) => {
+        enqueueSyncOperation({
+          description: `reorder-item:${item.id}`,
+          run: () => tabGroupsService.updateTabGroupItem(item.id, { position: index }),
+        })
+      })
     } else {
       // 跨组移动
       if (!sourceGroup.items || !targetGroup.items) {
@@ -435,34 +518,26 @@ export function TabGroupsPage() {
         })
       )
 
-      // Update backend
-      try {
-        // 使用专门的移动 API
-        await tabGroupsService.moveTabGroupItem(sourceItem.id, targetGroup.id, targetIndex)
+      enqueueSyncOperation({
+        description: `move-item:${sourceItem.id}`,
+        run: () => tabGroupsService.moveTabGroupItem(sourceItem.id, targetGroup.id, targetIndex),
+      })
 
-        // 更新源组剩余项目的 position
-        await Promise.all(
-          newSourceItems.map((item: TabGroupItem, index: number) =>
-            tabGroupsService.updateTabGroupItem(item.id, { position: index })
-          )
-        )
+      newSourceItems.forEach((item: TabGroupItem, index: number) => {
+        enqueueSyncOperation({
+          description: `source-reorder-item:${item.id}`,
+          run: () => tabGroupsService.updateTabGroupItem(item.id, { position: index }),
+        })
+      })
 
-        logger.log('✅ Item moved across groups successfully')
-      } catch (err) {
-        logger.error('Failed to move item across groups:', err)
-        // Revert on error
-        setTabGroups((prev) =>
-          prev.map((g) => {
-            if (g.id === sourceGroup.id) {
-              return { ...g, items: sourceGroup.items, item_count: sourceGroup.items?.length ?? 0 }
-            }
-            if (g.id === targetGroup.id) {
-              return { ...g, items: targetGroup.items, item_count: targetGroup.items?.length ?? 0 }
-            }
-            return g
-          })
-        )
-      }
+      newTargetItems.forEach((item: TabGroupItem, index: number) => {
+        enqueueSyncOperation({
+          description: `target-reorder-item:${item.id}`,
+          run: () => tabGroupsService.updateTabGroupItem(item.id, { position: index }),
+        })
+      })
+
+      logger.log('✅ Item moved across groups and queued for sync')
     }
   }
 
@@ -513,34 +588,26 @@ export function TabGroupsPage() {
       })
     )
 
-    // Update backend
-    try {
-      // 使用专门的移动 API，移动到目标组末尾
-      await tabGroupsService.moveTabGroupItem(item.id, targetGroupId, newTargetItems.length - 1)
+    enqueueSyncOperation({
+      description: `move-item:${item.id}`,
+      run: () => tabGroupsService.moveTabGroupItem(item.id, targetGroupId, newTargetItems.length - 1),
+    })
 
-      // 更新源组剩余项目的 position
-      await Promise.all(
-        newSourceItems.map((i: TabGroupItem, index: number) =>
-          tabGroupsService.updateTabGroupItem(i.id, { position: index })
-        )
-      )
+    newSourceItems.forEach((i: TabGroupItem, index: number) => {
+      enqueueSyncOperation({
+        description: `source-reorder-item:${i.id}`,
+        run: () => tabGroupsService.updateTabGroupItem(i.id, { position: index }),
+      })
+    })
 
-      logger.log('✅ Item moved to group successfully')
-    } catch (err) {
-      logger.error('Failed to move item to group:', err)
-      // Revert on error
-      setTabGroups((prev) =>
-        prev.map((g) => {
-          if (g.id === currentGroupId) {
-            return { ...g, items: sourceGroup.items, item_count: sourceGroup.items?.length ?? 0 }
-          }
-          if (g.id === targetGroupId) {
-            return { ...g, items: targetGroup.items, item_count: targetGroup.items?.length || 0 }
-          }
-          return g
-        })
-      )
-    }
+    newTargetItems.forEach((i: TabGroupItem, index: number) => {
+      enqueueSyncOperation({
+        description: `target-reorder-item:${i.id}`,
+        run: () => tabGroupsService.updateTabGroupItem(i.id, { position: index }),
+      })
+    })
+
+    logger.log('✅ Item moved to group and queued for sync')
   }
 
   // 使用 useMemo 缓存筛选结果，避免每次渲染都重新计算
@@ -707,7 +774,8 @@ export function TabGroupsPage() {
           <div className="mb-6">
             {/* Title and Search Bar in one row */}
             {tabGroups.length > 0 && (
-              <div className="flex items-center gap-4 w-full">
+              <div className="flex flex-col gap-3 w-full">
+                <div className="flex items-center gap-4 w-full">
                 {/* 桌面端显示标题 */}
                 {!isMobile && (
                   <h1 className="text-xl font-semibold text-foreground whitespace-nowrap flex-shrink-0">
@@ -722,6 +790,44 @@ export function TabGroupsPage() {
                   onBatchModeToggle={() => setBatchMode(!batchMode)}
                   batchMode={batchMode}
                 />
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">
+                    {t('sync.autoSaveSeconds')}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={5}
+                    value={autoSyncSeconds}
+                    onChange={(event) => {
+                      const next = Number(event.target.value)
+                      if (!Number.isFinite(next) || next < 0) {
+                        setAutoSyncSeconds(0)
+                        return
+                      }
+                      setAutoSyncSeconds(next)
+                    }}
+                    className="w-20 h-9 px-2 rounded-md border border-border bg-card text-sm text-foreground"
+                    title={t('sync.autoSaveSeconds')}
+                  />
+                  <button
+                    onClick={() => void flushPendingSync('manual')}
+                    disabled={pendingSyncCount === 0 || isSavingSync}
+                    className="btn btn-primary btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={t('sync.saveNow')}
+                    type="button"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingSync ? t('sync.saving') : t('sync.saveNow')}</span>
+                    {pendingSyncCount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-primary-foreground/20 text-xs">
+                        {pendingSyncCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -967,7 +1073,13 @@ export function TabGroupsPage() {
         >
           <TodoSidebar
             tabGroups={tabGroups}
-            onUpdate={loadTabGroups}
+            onUpdate={async () => {
+              if (pendingSyncOperationsRef.current.length > 0) {
+                showError(t('sync.pendingRefreshBlocked'))
+                return
+              }
+              await loadTabGroups()
+            }}
           />
         </ResizablePanel>
       )}

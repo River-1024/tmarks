@@ -8,6 +8,14 @@
     "renameFailed": "重命名失败",
     "moveFailed": "移动失败"
   },
+  "sync": {
+    "saveNow": "保存同步",
+    "saving": "同步中...",
+    "saveSuccess": "已同步到数据库",
+    "saveFailed": "有 {{count}} 项同步失败，请重试",
+    "autoSaveSeconds": "自动保存(秒)",
+    "pendingRefreshBlocked": "有未保存修改，请先点击右上角“保存同步”"
+  },
   "menu": {
     "openInNewWindow": "在新窗口中打开",
     "openInCurrentWindow": "在此窗口中打开",

@@ -21,6 +21,7 @@ interface UseBatchActionsProps {
     message: string
     onConfirm: () => void
   }
+  enqueueSyncOperation?: (operation: { description: string; run: () => Promise<unknown> }) => void
 }
 
 export function useBatchActions({
@@ -30,6 +31,7 @@ export function useBatchActions({
   setSelectedItems,
   setConfirmDialog,
   confirmDialog,
+  enqueueSyncOperation,
 }: UseBatchActionsProps) {
   const { t } = useTranslation('tabGroups')
   const { success, error: showError } = useToastStore()
@@ -44,11 +46,20 @@ export function useBatchActions({
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, isOpen: false })
         try {
-          await Promise.all(
-            Array.from(selectedItems).map((itemId) =>
-              tabGroupsService.deleteTabGroupItem(itemId)
+          if (enqueueSyncOperation) {
+            Array.from(selectedItems).forEach((itemId) => {
+              enqueueSyncOperation({
+                description: `delete-tab-item:${itemId}`,
+                run: () => tabGroupsService.deleteTabGroupItem(itemId),
+              })
+            })
+          } else {
+            await Promise.all(
+              Array.from(selectedItems).map((itemId) =>
+                tabGroupsService.deleteTabGroupItem(itemId)
+              )
             )
-          )
+          }
 
           setTabGroups((prev) =>
             prev.map((group) => ({
@@ -74,11 +85,20 @@ export function useBatchActions({
     if (selectedItems.size === 0) return
 
     try {
-      await Promise.all(
-        Array.from(selectedItems).map((itemId) =>
-          tabGroupsService.updateTabGroupItem(itemId, { is_pinned: true })
+      if (enqueueSyncOperation) {
+        Array.from(selectedItems).forEach((itemId) => {
+          enqueueSyncOperation({
+            description: `update-tab-item-pin:${itemId}`,
+            run: () => tabGroupsService.updateTabGroupItem(itemId, { is_pinned: true }),
+          })
+        })
+      } else {
+        await Promise.all(
+          Array.from(selectedItems).map((itemId) =>
+            tabGroupsService.updateTabGroupItem(itemId, { is_pinned: true })
+          )
         )
-      )
+      }
 
       setTabGroups((prev) =>
         prev.map((group) => ({
@@ -101,11 +121,20 @@ export function useBatchActions({
     if (selectedItems.size === 0) return
 
     try {
-      await Promise.all(
-        Array.from(selectedItems).map((itemId) =>
-          tabGroupsService.updateTabGroupItem(itemId, { is_todo: true })
+      if (enqueueSyncOperation) {
+        Array.from(selectedItems).forEach((itemId) => {
+          enqueueSyncOperation({
+            description: `update-tab-item-todo:${itemId}`,
+            run: () => tabGroupsService.updateTabGroupItem(itemId, { is_todo: true }),
+          })
+        })
+      } else {
+        await Promise.all(
+          Array.from(selectedItems).map((itemId) =>
+            tabGroupsService.updateTabGroupItem(itemId, { is_todo: true })
+          )
         )
-      )
+      }
 
       setTabGroups((prev) =>
         prev.map((group) => ({

@@ -8,6 +8,14 @@
     "renameFailed": "Rename failed",
     "moveFailed": "Move failed"
   },
+  "sync": {
+    "saveNow": "Save Sync",
+    "saving": "Syncing...",
+    "saveSuccess": "Synced to database",
+    "saveFailed": "{{count}} sync operations failed. Please retry.",
+    "autoSaveSeconds": "Auto Save (s)",
+    "pendingRefreshBlocked": "You have unsaved changes. Click \"Save Sync\" in the top-right first."
+  },
   "menu": {
     "openInNewWindow": "Open in new window",
     "openInCurrentWindow": "Open in current window",
